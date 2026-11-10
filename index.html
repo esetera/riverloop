@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#192a21">
+  <meta name="description" content="A scenic cycling game for a stationary bike, with countryside, coast, a misty lake, and futuristic city rides.">
+  <link rel="icon" href="/riverloop.svg" type="image/svg+xml">
+  <title>Riverloop · Willowmere Valley</title>
+</head>
+<body>
+  <svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="river-icon" viewBox="0 0 40 40"><path d="M4 23c5 0 7-3 11-9 2-3 4-5 7-5 5 0 7 5 4 8-3 4-8 3-9 7-1 3 2 6 7 6 6 0 10-4 13-9M4 30c5 0 7-2 10-6M25 36c5-1 8-3 11-6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="arrow-icon" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6" /></symbol>
+    <symbol id="play-icon" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7z" /></symbol>
+    <symbol id="pause-icon" viewBox="0 0 24 24"><path d="M9 5v14m6-14v14" /></symbol>
+    <symbol id="sound-icon" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Zm12-.5a5 5 0 0 1 0 7m2.6-9.6a9 9 0 0 1 0 12.2" /></symbol>
+    <symbol id="muted-icon" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Zm13 1 4 4m0-4-4 4" /></symbol>
+    <symbol id="radio-icon" viewBox="0 0 24 24"><path d="m6 7 12-4M4 8h16v12H4zM7 11h10m-10 5h4m5 0h1" /></symbol>
+    <symbol id="settings-icon" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14M9 4v6m6-1v6m-5-1v6" /></symbol>
+    <symbol id="fullscreen-icon" viewBox="0 0 24 24"><path d="M9 4H4v5m11-5h5v5m0 6v5h-5M4 15v5h5" /></symbol>
+    <symbol id="exit-fullscreen-icon" viewBox="0 0 24 24"><path d="M4 9h5V4m6 0v5h5m0 6h-5v5m-6 0v-5H4" /></symbol>
+    <symbol id="leaf-icon" viewBox="0 0 24 24"><path d="M5 17c-1-8 5-11 14-12 1 8-2 14-10 14M4 21l10-10" /></symbol>
+    <symbol id="flag-icon" viewBox="0 0 24 24"><path d="M5 21V4m0 2c5-4 8 4 14 0v9c-6 4-9-4-14 0" /></symbol>
+    <symbol id="close-icon" viewBox="0 0 24 24"><path d="m6 6 12 12m0-12L6 18" /></symbol>
+    <symbol id="pin-icon" viewBox="0 0 24 24"><path d="M12 21s6-6 6-11a6 6 0 1 0-12 0c0 5 6 11 6 11Zm0-9a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" /></symbol>
+    <symbol id="heart-icon" viewBox="0 0 24 24"><path d="M20.3 5.6a4.8 4.8 0 0 0-6.8 0L12 7.2l-1.5-1.6a4.8 4.8 0 1 0-6.8 6.8L12 21l8.3-8.6a4.8 4.8 0 0 0 0-6.8Z" /></symbol>
+  </svg>
+  <div id="app" data-phase="idle">
+    <canvas id="world" aria-label="Animated countryside road through Willowmere Valley"></canvas>
+    <div class="screen-wash" aria-hidden="true"></div>
+    <header class="masthead">
+      <div class="wordmark">
+        <span class="logo-ring"><svg><use href="#river-icon"/></svg></span>
+        <span><strong>Riverloop</strong><small>SCENIC CYCLING</small></span>
+      </div>
+      <div class="masthead-actions">
+        <button type="button" id="fullscreen" class="fullscreen-button" aria-label="Fullscreen" title="Fullscreen"><svg class="icon" aria-hidden="true"><use href="#fullscreen-icon"/></svg><span>Fullscreen</span></button>
+        <button type="button" id="mute" class="icon-button" aria-label="Mute all sound" aria-pressed="false" title="Mute sound (M)"><svg class="icon"><use href="#sound-icon"/></svg></button>
+        <button type="button" id="open-radio" class="settings-button" aria-label="Ride Radio" aria-controls="ride-radio" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#radio-icon"/></svg><span>Ride Radio</span></button>
+        <button type="button" id="open-settings" class="settings-button" aria-label="Settings"><svg class="icon"><use href="#settings-icon"/></svg><span>Settings</span></button>
+      </div>
+      <label class="scenario-picker" id="scenario-picker">
+        <span>Ride scenario</span>
+        <select id="scenario">
+          <option value="valley">Willowmere Valley</option>
+          <option value="coast">Saltwind Coast</option>
+          <option value="cyber">Neon District</option>
+          <option value="echo">Echo Basin</option>
+          <option value="machine">Machine City</option>
+          <option value="airwave">Airwave Coast</option>
+          <option value="folio">Folio Quarter</option>
+          <option value="aurora">Aurora Divide</option>
+        </select>
+      </label>
+    </header>
+    <p id="fullscreen-notice" class="fullscreen-notice" role="status" hidden></p>
+    <main>
+      <section id="start-screen" class="start-screen" aria-labelledby="start-title">
+        <div class="start-card">
+          <div class="eyebrow"><span class="badge-dot"></span> SCENIC RIDE <span class="eyebrow-rule"></span><span id="intro-route">ROUTE 01</span></div>
+          <h1 id="start-title"><span id="scenario-first">Willowmere</span><br><em id="scenario-last">Valley</em></h1>
+          <p class="intro" id="scenario-intro">Follow the river through quiet woods, across a timber bridge, and into a village in the late afternoon sun.</p>
+          <button type="button" id="tune-airwave" class="text-button" hidden><svg class="icon" aria-hidden="true"><use href="#radio-icon"/></svg> Tune in to Ride Radio</button>
+          <div class="mode-picker">
+            <label for="ride-mode">Ride mode</label>
+            <select id="ride-mode"><option value="scenic">Scenic</option><option value="steady">Steady</option><option value="hills">Rolling Hills</option></select>
+            <p id="mode-note"></p>
+            <label id="cadence-target-row" hidden>Target cadence <span><input id="cadence-target" type="number" min="30" max="140" step="1" value="75" inputmode="numeric"> RPM</span></label>
+          </div>
+          <div class="start-divider"></div>
+          <div class="duration-header">
+            <h2 id="duration-label">Ride length</h2>
+            <span class="unit">MINUTES</span>
+          </div>
+          <div id="durations" class="duration-choices" role="group" aria-labelledby="duration-label">
+            <button type="button" data-minutes="5" aria-pressed="false">5</button>
+            <button type="button" data-minutes="10" aria-pressed="true">10</button>
+            <button type="button" data-minutes="15" aria-pressed="false">15</button>
+            <button type="button" data-minutes="20" aria-pressed="false">20</button>
+            <button type="button" data-minutes="30" aria-pressed="false">30</button>
+            <button type="button" data-minutes="custom" aria-pressed="false">Custom</button>
+          </div>
+          <label class="custom" id="custom-row" hidden>Custom minutes
+            <input id="custom-minutes" type="number" inputmode="numeric" step="1" min="1" max="120" aria-describedby="custom-hint">
+            <small id="custom-hint">1–120 minutes</small>
+          </label>
+          <button type="button" class="begin primary" id="start-ride" aria-describedby="route-name">Start ride <svg class="icon" aria-hidden="true"><use href="#arrow-icon"/></svg></button>
+          <button type="button" id="show-mission" class="text-button" aria-controls="mission-plan">View scenic mission ↓</button>
+          <div class="daily-plan">
+            <div class="daily-heading"><span class="eyebrow" id="daily-label">ROTATING DAILY RIDE</span><span id="daily-discoveries"></span></div>
+            <p id="daily-destination"></p>
+            <button type="button" id="daily-ride"><span>Daily ride · 10 min</span> <svg class="icon" aria-hidden="true"><use href="#arrow-icon"/></svg></button>
+            <div class="week-label"><span>This week</span><strong id="weekly-minutes">0 / 60 min</strong></div>
+            <progress id="weekly-progress" value="0" max="60" aria-label="Weekly cycling goal"></progress>
+          </div>
+          <div class="cadence-setup">
+            <div class="sensor-buttons"><button type="button" id="pair-cadence">Pair cadence sensor</button><button type="button" id="pair-heart">Pair heart-rate monitor</button></div>
+            <p id="cadence-status" role="status">Simulated speed by default. Spin the pedals before pairing.</p>
+            <p id="heart-status" role="status" hidden></p>
+          </div>
+          <p id="world-error" class="world-error" role="alert" hidden></p>
+        </div>
+        <aside class="route-card" id="route-card" aria-label="Willowmere route">
+          <div class="route-title"><svg class="icon"><use href="#pin-icon"/></svg><div><small id="route-number">ROUTE 01</small><strong id="route-name">Willowmere Valley</strong></div></div>
+          <svg class="route-map" id="start-map" role="img" aria-label="Map of the loop and river"></svg>
+          <div class="setup-profile">
+            <span class="eyebrow">Elevation profile</span>
+            <svg class="profile-chart" id="start-profile" role="img"></svg>
+            <div class="profile-scale"><span id="start-profile-scale"></span><span id="start-profile-length"></span></div>
+          </div>
+          <div class="route-caption" id="route-landmarks">WOODLAND · RIVER · VILLAGE</div>
+          <section class="mission-plan" id="mission-plan" aria-labelledby="mission-name">
+            <div class="daily-heading"><span class="eyebrow">SCENIC MISSION</span><span id="missions-completed"></span></div>
+            <strong id="mission-name"></strong>
+            <p id="mission-description"></p>
+            <button type="button" id="start-mission"><span>Start mission</span> <svg class="icon" aria-hidden="true"><use href="#arrow-icon"/></svg></button>
+          </section>
+        </aside>
+      </section>
+
+      <section id="ride-screen" class="ride-screen" aria-label="Ride dashboard" hidden>
+        <svg class="bike-front" viewBox="0 0 480 204" aria-hidden="true">
+          <defs>
+            <linearGradient id="bike-metal" x2="0" y2="1">
+              <stop offset="0" stop-color="#d2d5d1"/><stop offset=".22" stop-color="#818b8e"/>
+              <stop offset=".52" stop-color="#303b42"/><stop offset="1" stop-color="#12191c"/>
+            </linearGradient>
+            <linearGradient id="bike-rubber" x2="0" y2="1">
+              <stop offset="0" stop-color="#42484a"/><stop offset=".37" stop-color="#242a2c"/><stop offset="1" stop-color="#101416"/>
+            </linearGradient>
+          </defs>
+          <path d="M224 204 230 150Q240 130 250 150L256 204" fill="#151b1d" stroke="#697375" stroke-width="3"/>
+          <path d="m215 203 10-55q15-11 30 0l10 55" fill="none" stroke="#141b20" stroke-width="8"/>
+          <path d="M103 75q20 9 45 43m229-43q-20 9-45 43" fill="none" stroke="#1b252a" stroke-width="2"/>
+          <path d="M75 76h58q30 0 45 16l11 11q10 9 25 9h52q15 0 25-9l11-11q15-16 45-16h58" fill="none" stroke="#192126" stroke-width="17" stroke-linecap="round"/>
+          <path d="M75 74h58q30 0 45 16l11 11q10 9 25 9h52q15 0 25-9l11-11q15-16 45-16h58" fill="none" stroke="url(#bike-metal)" stroke-width="12" stroke-linecap="round"/>
+          <path d="M53 80 124 78m232 0 71 2" fill="none" stroke="url(#bike-rubber)" stroke-width="24" stroke-linecap="round"/>
+          <path d="M57 74h65m236 0h65" fill="none" stroke="#9aa19a" stroke-opacity=".55" stroke-width="1.6" stroke-dasharray="1 4"/>
+          <path d="m61 89 10 15 29 1m319-16-10 15-29 1" fill="none" stroke="url(#bike-metal)" stroke-width="5" stroke-linecap="round"/>
+          <path d="m227 112-4 37q17 10 34 0l-4-37z" fill="url(#bike-metal)" stroke="#181f24" stroke-width="2"/>
+          <circle cx="240" cy="109" r="14" fill="#303b40" stroke="#929e9c" stroke-width="2"/>
+          <circle cx="240" cy="109" r="3" fill="#d2d5d1"/>
+          <path d="M232 145q8 2 16 0" fill="none" stroke="var(--gold)" stroke-opacity=".85" stroke-width="2"/>
+        </svg>
+        <div class="ride-hud">
+          <div class="hud-panel ride-metrics">
+            <div class="ride-metric">
+              <span class="eyebrow" id="time-label">TIME LEFT</span><strong id="remaining">10:00</strong>
+              <progress id="ride-progress" max="1" value="0" aria-label="Session progress"></progress>
+            </div>
+            <div class="ride-metric" id="cadence-readout">
+              <span class="eyebrow">CADENCE</span><strong id="pedal-rpm">—</strong><small>RPM</small>
+              <p id="cadence-coaching" hidden></p>
+            </div>
+            <div class="ride-metric heart-readout" id="heart-readout">
+              <span class="eyebrow"><svg class="icon" aria-hidden="true"><use href="#heart-icon"/></svg> HEART RATE</span><strong id="heart-bpm">—</strong><small>BPM</small>
+            </div>
+          </div>
+          <p class="mission-status" id="mission-status" hidden></p>
+          <p class="turn-cue" id="turn-cue" hidden></p>
+          <div class="hud-panel effort-panel" id="effort-panel" data-effort="Easy">
+            <div class="eyebrow"><span class="badge-dot"></span><span id="stage">WARM-UP</span></div>
+            <strong id="effort">Easy</strong>
+            <p id="effort-detail">Set a light resistance.</p>
+            <div class="next-line"><span id="next-effort">Next · Steady</span><span id="next-countdown">2:00</span></div>
+          </div>
+          <div class="ride-route-panels">
+            <div class="hud-panel lap-panel">
+              <div><span class="eyebrow">LAP</span><strong id="lap">01</strong></div>
+              <svg class="route-map" id="ride-map" role="img" aria-label="Your position on the route"></svg>
+            </div>
+            <div class="hud-panel profile-panel" aria-label="Elevation profile">
+              <div class="profile-heading"><span class="eyebrow">Elevation profile</span><b id="ride-grade" aria-label="Current gradient">0.0%</b></div>
+              <svg class="profile-chart" id="ride-profile" role="img"></svg>
+              <div class="profile-scale"><span id="ride-profile-scale"></span><span id="ride-profile-length"></span></div>
+              <div class="ride-discovery"><svg class="icon" aria-hidden="true"><use href="#pin-icon"/></svg><span id="ride-landmark"></span></div>
+              <p class="ghost-readout" id="ghost-readout" hidden></p>
+            </div>
+          </div>
+        </div>
+        <div id="warning" class="warning" hidden aria-live="polite"><span class="badge-dot"></span><strong id="warning-text"></strong><span id="warning-count" aria-hidden="true"></span></div>
+        <div class="discovery-toast" id="discovery-toast" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#pin-icon"/></svg>
+          <div><span class="eyebrow" id="discovery-title">LANDMARK DISCOVERED</span><strong id="discovery-name"></strong></div>
+        </div>
+        <nav class="ride-controls" aria-label="Ride controls">
+          <button type="button" id="pause-ride"><svg class="icon"><use href="#pause-icon"/></svg><span>Pause</span><kbd>Space</kbd></button>
+          <button type="button" id="make-easier"><svg class="icon"><use href="#leaf-icon"/></svg><span>Make easier</span><kbd>E</kbd></button>
+          <button type="button" id="finish-ride"><svg class="icon"><use href="#flag-icon"/></svg><span>Finish</span><kbd>F</kbd></button>
+          <button type="button" id="pin-details" aria-pressed="false">Details</button>
+        </nav>
+        <small class="ride-footnote" id="ride-footnote">WILLOWMERE VALLEY · SIMULATED RIDE</small>
+      </section>
+
+      <section id="pause-screen" class="middle-card" aria-labelledby="pause-title" hidden>
+        <span class="eyebrow" data-scenario-name>WILLOWMERE VALLEY</span>
+        <h2 id="pause-title">Ride paused</h2>
+        <p>Take your time. The clock is paused.</p>
+        <p id="cadence-reconnect-status" role="status" hidden></p>
+        <button type="button" id="reconnect-cadence" class="secondary" hidden>Reconnect cadence sensor</button>
+        <button type="button" class="primary" id="resume-ride"><svg class="icon"><use href="#play-icon"/></svg> Resume ride</button>
+      </section>
+
+      <section id="complete-screen" class="middle-card complete-card" aria-labelledby="complete-title" hidden>
+        <span class="logo-ring finish-mark"><svg><use href="#river-icon"/></svg></span>
+        <span class="eyebrow" data-scenario-name>WILLOWMERE VALLEY</span>
+        <h2 id="complete-title">Ride complete</h2>
+        <div class="stats">
+          <div><span>RIDE TIME</span><strong id="completed-time">0:00</strong></div>
+          <div><span>LAPS COMPLETED</span><strong id="completed-laps">0</strong></div>
+        </div>
+        <p id="complete-note">Ride time excludes pauses.</p>
+        <div class="finish-progress" id="finish-progress" hidden>
+          <div class="week-label"><span>This week</span><strong id="finished-weekly-minutes"></strong></div>
+          <progress id="finished-weekly-progress" value="0" max="60" aria-label="Weekly cycling goal"></progress>
+          <p id="completed-discovery" hidden></p>
+          <p id="completed-ghost" hidden>Last lap saved for your ghost.</p>
+          <p id="completed-mission" hidden></p>
+          <ul id="ride-milestones" class="milestones" aria-label="Personal milestones" hidden></ul>
+        </div>
+        <button type="button" class="primary" id="ride-again">Ride again <svg class="icon"><use href="#arrow-icon"/></svg></button>
+        <button type="button" class="secondary" id="return-start">Return to start</button>
+      </section>
+
+      <aside id="developer-panel" class="developer-panel" aria-label="Developer tools" hidden>
+        <span class="eyebrow">DEVELOPER MODE</span>
+        <output id="fps">— FPS</output>
+        <label>Session speed
+          <select id="time-rate">
+            <option value="1">Real time</option><option value="4">4×</option>
+            <option value="12">12×</option><option value="24">24×</option>
+          </select>
+        </label>
+        <button type="button" id="jump-effort">Jump to next effort warning</button>
+        <button type="button" id="jump-lap">Jump near lap end</button>
+      </aside>
+      <aside id="ride-radio" class="ride-radio" aria-labelledby="radio-title" hidden>
+        <div class="radio-heading">
+          <div><span class="eyebrow">RIVERLOOP · LISTEN WHILE YOU RIDE</span><h2 id="radio-title" tabindex="-1">Ride Radio</h2></div>
+          <button type="button" id="close-radio" class="icon-button" aria-label="Close Ride Radio"><svg class="icon" aria-hidden="true"><use href="#close-icon"/></svg></button>
+        </div>
+        <div id="radio-video" class="radio-video" hidden></div>
+        <div id="radio-now" class="radio-actions" hidden>
+          <button type="button" id="radio-next">Next video</button>
+          <button type="button" id="radio-stop">Stop video</button>
+          <a id="radio-source" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">Watch on YouTube ↗</a>
+        </div>
+        <details id="radio-options" open>
+          <summary>Choose or swap a video</summary>
+          <label for="radio-choice">AI talks and saved links</label>
+          <div class="radio-field"><select id="radio-choice"></select><button type="button" id="radio-play">Load video</button></div>
+          <form class="radio-form">
+            <label for="radio-url">YouTube video or playlist link</label>
+            <div class="radio-field"><input id="radio-url" type="url" placeholder="https://youtu.be/…" autocomplete="off" required><button type="submit">Add &amp; load</button></div>
+          </form>
+          <div class="radio-search"><a href="https://www.youtube.com/results?search_query=latest+AI+news+this+week" target="_blank" rel="noopener noreferrer">Find AI news ↗</a><a href="https://www.youtube.com/results?search_query=AI+book+publishing+news+podcast" target="_blank" rel="noopener noreferrer">Find publishing talks ↗</a></div>
+        </details>
+        <p id="radio-status" class="radio-status" role="status"></p>
+      </aside>
+    </main>
+  </div>
+
+  <dialog id="settings" class="modal" aria-labelledby="settings-title">
+    <form method="dialog" class="modal-body">
+      <div class="modal-heading"><div><span class="eyebrow">RIVERLOOP</span><h2 id="settings-title">Settings</h2></div>
+        <button value="close" class="icon-button" aria-label="Close settings"><svg class="icon"><use href="#close-icon"/></svg></button>
+      </div>
+      <fieldset>
+        <legend>Ride goals</legend>
+        <div class="goal-settings">
+          <label for="weekly-goal">Weekly cycling goal</label>
+          <span><input id="weekly-goal" type="number" min="5" max="600" step="1" value="60" inputmode="numeric" aria-describedby="weekly-goal-hint"> min</span>
+        </div>
+        <small id="weekly-goal-hint">5–600 minutes. Your week starts on Monday.</small>
+        <label class="ghost-setting"><input id="ghost-enabled" type="checkbox"> Ride with my last-lap ghost</label>
+        <small>Finish a lap on a route to record its ghost. Simulated and sensor laps are kept separate.</small>
+      </fieldset>
+      <fieldset>
+        <legend>Heart rate</legend>
+        <p>On a Galaxy Watch4 or Watch5, start broadcasting in <a href="https://play.google.com/store/apps/details?id=lukas.the.coder.heartforbluetooth" target="_blank" rel="noopener noreferrer">Heart for Bluetooth</a> before pairing.</p>
+        <button type="button" id="settings-heart" class="secondary">Pair heart-rate monitor</button>
+        <small id="settings-heart-status" role="status">BPM is shown live during a ride.</small>
+      </fieldset>
+      <fieldset>
+        <legend>Your resistance settings</legend>
+        <p>Use your own words for the bike’s resistance dial. These notes appear and can be spoken during the ride.</p>
+        <div class="effort-fields">
+          <label>Easy <input id="description-0" type="text" maxlength="100" placeholder="e.g. Just enough to feel the pedals"></label>
+          <label>Steady <input id="description-1" type="text" maxlength="100" placeholder="e.g. Half a turn from Easy"></label>
+          <label>Gentle hill <input id="description-2" type="text" maxlength="100" placeholder="e.g. A small turn above Steady"></label>
+        </div>
+        <small>Effort levels are adjustable game prompts. Pick what feels comfortable for you.</small>
+      </fieldset>
+      <fieldset>
+        <legend>Sound</legend>
+        <div class="sound-options">
+          <label><input id="ambient" type="checkbox"> Ambient sound</label>
+          <label><input id="speech" type="checkbox"> Spoken cues</label>
+          <label><input id="music" type="checkbox"> Electronic music</label>
+          <label><input id="cycling" type="checkbox"> Cycling sounds</label>
+          <label><input id="muted" type="checkbox"> Mute all</label>
+        </div>
+        <label class="music-choice">Music style <select id="music-style">
+          <option value="random">Random</option>
+          <option value="drift">Ambient synth</option>
+          <option value="fogbloom">Fog Bloom · Evolving ambient</option>
+          <option value="pulse">Downtempo electronic</option>
+          <option value="arps">Melodic arpeggios</option>
+          <option value="synthwave">Synthwave</option>
+          <option value="house">Deep house</option>
+          <option value="techno">Minimal techno</option>
+          <option value="breaks">Drum &amp; bass</option>
+          <optgroup label="Tech house">
+            <option value="afterhours">Afterhours</option>
+            <option value="harbor">Harbor Signal</option>
+            <option value="nightshift">Night Shift</option>
+          </optgroup>
+        </select></label>
+        <div class="music-choice">
+          <label for="music-volume">Music volume</label>
+          <input id="music-volume" type="range" min="0" max="100" value="50" aria-valuetext="50%">
+          <output id="music-volume-value" for="music-volume">50%</output>
+        </div>
+        <div class="sound-note"><small>Cycling sounds add drivetrain and breathing. Spoken cues use an installed English voice.</small>
+          <button type="button" class="text-button" id="visual-only">Visual only</button></div>
+      </fieldset>
+      <fieldset class="quality-field">
+        <legend>Rendering</legend>
+        <label>Scenery quality <select id="quality"><option value="balanced">Balanced</option><option value="light">Light</option><option value="high">High</option></select></label>
+        <small id="wake-lock-status">Riverloop keeps your screen awake while it’s visible when your browser allows it.</small>
+      </fieldset>
+      <details class="keyboard-guide">
+        <summary>Keyboard shortcuts</summary>
+        <p><kbd>Space</kbd> Pause or resume · <kbd>E</kbd> Make easier · <kbd>F</kbd> Finish · <kbd>M</kbd> Mute · <kbd>S</kbd> Settings</p>
+      </details>
+      <p id="previous-ride" class="previous-ride" hidden></p>
+      <div id="developer-settings" class="developer-settings" hidden>
+        <button type="button" class="text-button" id="reset-preferences">Reset saved preferences</button>
+        <small id="reset-status" role="status"></small>
+      </div>
+      <button class="primary settings-done" value="close">Done <svg class="icon"><use href="#arrow-icon"/></svg></button>
+    </form>
+  </dialog>
+  <dialog id="finish-confirmation" class="modal finish-modal" aria-labelledby="finish-title">
+    <form method="dialog" class="modal-body">
+      <div class="modal-heading"><div><span class="eyebrow" data-scenario-name>WILLOWMERE VALLEY</span><h2 id="finish-title">Finish this ride?</h2></div></div>
+      <p>Your summary will show the time and laps you completed.</p>
+      <button class="primary" value="finish">Finish ride</button>
+      <button class="secondary" value="keep" autofocus>Keep riding</button>
+    </form>
+  </dialog>
+  <div class="visually-hidden" id="announcement" role="status"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
