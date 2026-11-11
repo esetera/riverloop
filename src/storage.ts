@@ -121,6 +121,7 @@ export function loadSave(): Save {
     } else {
       for (const ride of result.rides) recordMinutes(progress.days, calendarDay(new Date(ride.endedAt)), ride.seconds)
     }
+    if (typeof savedProgress.weekResetAt === 'number' && Number.isFinite(savedProgress.weekResetAt)) progress.weekResetAt = savedProgress.weekResetAt
     if (typeof savedProgress.lastDaily === 'number' && Number.isInteger(savedProgress.lastDaily)) progress.lastDaily = savedProgress.lastDaily
     if (Array.isArray(savedProgress.discovered)) {
       const discovered = savedProgress.discovered

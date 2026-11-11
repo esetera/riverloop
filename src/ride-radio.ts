@@ -63,6 +63,7 @@ export class RideRadio {
   private readonly panel = document.querySelector<HTMLElement>('#ride-radio')!
   private readonly toggleButton = document.querySelector<HTMLButtonElement>('#open-radio')!
   private readonly options = document.querySelector<HTMLDetailsElement>('#radio-options')!
+  private readonly music = document.querySelector<HTMLDetailsElement>('#radio-music')!
   private readonly choice = document.querySelector<HTMLSelectElement>('#radio-choice')!
   private readonly link = document.querySelector<HTMLAnchorElement>('#radio-source')!
   private readonly screen = document.querySelector<HTMLElement>('#radio-video')!
@@ -108,9 +109,13 @@ export class RideRadio {
 
   get active() { return this.screen.hasChildNodes() }
 
-  show() {
+  show(youtube = false) {
     this.panel.hidden = false
     this.toggleButton.setAttribute('aria-expanded', 'true')
+    if (youtube) {
+      this.options.open = true
+      this.music.open = false
+    }
   }
 
   stop(notify = true) {
@@ -167,6 +172,7 @@ export class RideRadio {
     this.screen.replaceChildren(player)
     this.screen.hidden = false
     this.options.open = false
+    this.music.open = false
     this.update()
     this.onPlayback(true)
   }

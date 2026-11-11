@@ -4,7 +4,7 @@ import { RideRadio } from './ride-radio.ts'
 import { CadenceSensor } from './cadence.ts'
 import { CadenceRideInput, SimulatedRideInput } from './input.ts'
 import { HeartRateSensor } from './heart-rate.ts'
-import { calendarDay, ClimbRecorder, dailyMinutes, dailyRoute, ghostKey, ghostPosition, ghostTime, LapRecorder, recordMilestones, recordMinutes, weekSeconds } from './progress.ts'
+import { calendarDay, ClimbRecorder, dailyMinutes, dailyRoute, ghostKey, ghostPosition, ghostTime, LapRecorder, recordMilestones, recordMinutes, weekSeconds, weekStart } from './progress.ts'
 import { riverCenter } from './route.ts'
 import { drawProfile } from './profile.ts'
 import { coastEdge, echoLake, isScenarioId, scenarioIds, scenarios } from './scenarios.ts'
@@ -14,6 +14,11 @@ import type { Effort } from './session.ts'
 import { defaultPreferences, isMusicStyle, loadSave, validCadenceTarget, validMinutes, validWeeklyGoal, writeSave } from './storage.ts'
 import type { Quality } from './storage.ts'
 import { RideWorld } from './world.ts'
+import { chapterAt, loadLesson, type Lesson } from './lessons.ts'
+import { loadThoughtRide, thoughtLap, type ThoughtRide } from './thinking.ts'
+import { researchProvider } from './ride-research.ts'
+import { setupRoadLinks } from './road-links.ts'
+import { setupArtGallery } from './art-gallery.ts'
 
 function element<T extends HTMLElement>(id: string) {
   const found = document.getElementById(id)
@@ -49,6 +54,32 @@ const cadenceSensor = new CadenceSensor()
 const heartSensor = new HeartRateSensor()
 
 const app = element('app')
+const roadLinks = setupRoadLinks()
+const artGallery = setupArtGallery(roadLinks.save)
+const menu = element<HTMLDetailsElement>('ride-menu')
+const conceptForm = element<HTMLFormElement>('concept-form')
+const conceptInput = element<HTMLInputElement>('concept')
+const conceptStatus = element('concept-status')
+const chapterStatus = element('lesson-chapter')
+const thoughtForm = element<HTMLFormElement>('thought-form')
+const thoughtQuestion = element<HTMLTextAreaElement>('thought-question')
+const thoughtPlan = element<HTMLButtonElement>('plan-thought')
+const thoughtStatus = element('thought-status')
+let thought: ThoughtRide | undefined
+let thoughtRequest: AbortController | undefined
+const thoughtReady = () => scenarioId !== 'thought' || Boolean(thought)
+
+let lesson: Lesson | undefined
+let loadedConcept = ''
+let topicRequest: AbortController | undefined
+let lessonProvider: string | undefined
+let agentName = 'the research agent'
+const providerReady = researchProvider().then(provider => {
+  if (provider) agentName = provider
+})
+const conceptKey = () => conceptInput.value.trim().replace(/\s+/g, ' ').toLowerCase()
+const lessonReady = () => scenarioId !== 'ideas' || Boolean(lesson && !topicRequest && conceptKey() === loadedConcept)
+
 const start = element<HTMLButtonElement>('start-ride')
 const dailyStart = element<HTMLButtonElement>('daily-ride')
 const missionStart = element<HTMLButtonElement>('start-mission')
@@ -101,7 +132,6 @@ const mute = element<HTMLButtonElement>('mute')
 const fullscreen = element<HTMLButtonElement>('fullscreen')
 const fullscreenNotice = element('fullscreen-notice')
 const settings = element<HTMLDialogElement>('settings')
-const finishConfirmation = element<HTMLDialogElement>('finish-confirmation')
 const announcement = element('announcement')
 const customRow = element('custom-row')
 const customInput = element<HTMLInputElement>('custom-minutes')
@@ -134,7 +164,7 @@ let effortDetailsUntil = 0
 
 try {
   const canvas = element<HTMLCanvasElement>('world')
-  world = new RideWorld(canvas, route, scenarioId)
+  world = new RideWorld(canvas, route, scenarioId, roadLinks.save, roadLinks.explain)
   canvas.addEventListener('webglcontextlost', event => {
     event.preventDefault()
     worldLost = true
@@ -204,7 +234,7 @@ function makeMap(id: string) {
   }).join(' ') + ' Z'
   svg.append(svgNode('path', { d: road, class: 'map-road' }))
   if (scenarioId === 'valley') svg.append(svgNode('circle', { cx: '105', cy: '-22', r: '8', class: 'map-site' }))
-  if (['echo', 'machine', 'airwave', 'folio', 'aurora'].includes(scenarioId)) {
+  if (['echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art'].includes(scenarioId)) {
     const site = route.pointAt(scenario.discovery.at)
     svg.append(svgNode('circle', { cx: site.x.toFixed(1), cy: site.z.toFixed(1), r: '7', class: 'map-site' }))
   }
@@ -227,6 +257,13 @@ function showScenario() {
   app.dataset.scenario = scenarioId
   scenarioPicker.value = scenarioId
   element('tune-airwave').hidden = scenarioId !== 'airwave'
+  conceptForm.hidden = scenarioId !== 'ideas'
+  thoughtForm.hidden = scenarioId !== 'thought'
+  if (scenarioId === 'thought' && thought) world?.setThought(thought, 0)
+  if (scenarioId === 'ideas') {
+    if (lesson) world?.setLesson(lesson, 0)
+    showConceptStatus()
+  }
   setText(element('scenario-first'), scenario.title[0])
   setText(element('scenario-last'), scenario.title[1])
   setText(element('scenario-intro'), scenario.description)
@@ -276,6 +313,7 @@ function changeScenario(id: ScenarioId) {
   persist()
   showScenario()
   showMissionPlan()
+  showDuration()
   world.draw(scenario.start, 0, true, false)
 }
 showScenario()
@@ -296,8 +334,10 @@ function showDuration() {
   const valid = !custom || validMinutes(minutes)
   customInput.setAttribute('aria-invalid', String(!valid))
   setText(customHint, valid ? '1–120 minutes' : 'Enter 1–120 whole minutes')
-  start.disabled = !valid || !world || worldLost || cadenceSensor.state === 'connecting'
-  dailyStart.disabled = missionStart.disabled = !world || worldLost || cadenceSensor.state === 'connecting'
+  const unavailable = !world || worldLost || cadenceSensor.state === 'connecting'
+  start.disabled = !valid || unavailable || !lessonReady() || !thoughtReady()
+  missionStart.disabled = unavailable || !lessonReady() || !thoughtReady()
+  dailyStart.disabled = unavailable
   for (const button of presetButtons) {
     const selected = custom ? button.dataset.minutes === 'custom' : Number(button.dataset.minutes) === preferences.minutes
     button.setAttribute('aria-pressed', String(selected))
@@ -351,12 +391,14 @@ function showSound() {
     element<HTMLInputElement>(field).checked = preferences[field]
   }
   const volumeText = `${preferences.musicVolume}%`
+  musicStyleInput.value = preferences.musicStyle
   musicVolumeInput.value = String(preferences.musicVolume)
   musicVolumeInput.setAttribute('aria-valuetext', volumeText)
   setText(musicVolumeValue, volumeText)
   const silent = preferences.muted || !soundEnabled()
   mute.setAttribute('aria-pressed', String(silent))
   mute.setAttribute('aria-label', silent ? 'Unmute sound' : 'Mute all sound')
+  setText(element('mute-label'), silent ? 'Unmute sound' : 'Mute sound')
   mute.title = silent ? 'Unmute sound (M)' : 'Mute sound (M)'
   mute.querySelector('use')?.setAttribute('href', silent ? '#muted-icon' : '#sound-icon')
   if (preferences.muted) radio.stop(false)
@@ -367,11 +409,11 @@ function showSound() {
 function showSettings() {
   efforts.forEach((effort, i) => { element<HTMLInputElement>(`description-${i}`).value = preferences.descriptions[effort] })
   qualityInput.value = preferences.quality
-  musicStyleInput.value = preferences.musicStyle
   weeklyGoalInput.value = String(preferences.weeklyGoal)
   ghostEnabled.checked = preferences.ghost
   world?.setQuality(preferences.quality)
   showSound()
+  showHistory()
   const last = rides[0]
   const previous = element('previous-ride')
   previous.hidden = !last
@@ -380,15 +422,17 @@ function showSettings() {
 
 function showPhase() {
   const phase = session.phase
+  chapterStatus.hidden = (scenarioId !== 'ideas' && scenarioId !== 'thought') || phase === 'idle' || phase === 'complete'
   app.dataset.phase = phase
   startScreen.hidden = phase !== 'idle'
   element('scenario-picker').hidden = phase !== 'idle'
   rideScreen.hidden = phase !== 'riding' && phase !== 'paused'
+  if (rideScreen.hidden) artGallery.hide()
   pauseScreen.hidden = phase !== 'paused'
   completeScreen.hidden = phase !== 'complete'
   setText(pause.querySelector('span')!, phase === 'paused' ? 'Resume' : 'Pause')
   pause.querySelector('use')?.setAttribute('href', phase === 'paused' ? '#play-icon' : '#pause-icon')
-  audio.sync(phase === 'riding', preferences)
+  showSound()
   showCadence()
   showHeartRate()
   if (phase === 'idle') showPlan()
@@ -461,6 +505,7 @@ function showCue() {
 }
 
 function showRide() {
+  if (scenarioId === 'art') artGallery.update(session.distance, route.length)
   const rpm = Math.round(cadenceSensor.rpm())
   setText(pedalRpm, session.usesCadence ? String(rpm) : '—')
   const target = preferences.targetCadence
@@ -510,15 +555,27 @@ function showRide() {
   const pinned = pinDetails.getAttribute('aria-pressed') === 'true'
   const showingCue = effortWarning || session.elapsed < Math.max(effortDetailsUntil, discoveryNoticeUntil)
   rideScreen.dataset.details = String(pinned || approachingTurn || showingCue)
+  if (scenarioId === 'ideas' && lesson) {
+    const lap = session.laps
+    const chapter = chapterAt(lesson, lap)
+    world?.setLesson(lesson, lap)
+    setText(chapterStatus, lesson.title + ' · ' + (lap < lesson.chapters.length ? 'Lap ' + (lap + 1) : 'Review') + ' · ' + chapter.name)
+  }
+  if (scenarioId === 'thought' && thought) {
+    const lap = session.laps
+    world?.setThought(thought, lap)
+    setText(chapterStatus, 'Thought Circuit · ' + thoughtLap(thought, lap).name)
+  }
   rideScreen.classList.toggle('sign-ahead', !pinned && !effortWarning && Boolean(world?.hasSignAhead(distance)))
 }
 
 function beginRide(minutes: number, day?: number, mission = false) {
-  if (!world || worldLost) return
+  if (!world || worldLost || !lessonReady() || !thoughtReady()) return
   void keepScreenAwake()
   const input = cadenceSensor.state === 'connected' ? new CadenceRideInput(() => cadenceSensor.rpm()) : new SimulatedRideInput()
   session = new RideSession(input, route, scenario.start, preferences.rideMode)
   session.start(mission ? Infinity : minutes * 60)
+  if (scenarioId === 'art') artGallery.start()
   world.startRide()
   setText(element('time-label'), mission ? 'RIDE TIME' : 'TIME LEFT')
   rideProgress.setAttribute('aria-label', mission ? 'Distance to mission destination' : 'Session progress')
@@ -540,7 +597,7 @@ function beginRide(minutes: number, day?: number, mission = false) {
   pause.focus({ preventScroll: true })
 }
 
-function showCompletion() {
+function recordCompletedRide() {
   const summary = session.summary()
   const today = calendarDay(new Date(summary.endedAt))
   const dailyComplete = dailyDay !== undefined && summary.seconds >= dailyMinutes * 60
@@ -549,12 +606,17 @@ function showCompletion() {
     const previous = rides.find(ride => ride.seconds > 0)
     const gap = previous ? today - calendarDay(new Date(previous.endedAt)) : 0
     milestones = recordMilestones(rideProgressData, scenarioId, summary.seconds, gap, climbRecorder?.best)
-    rides.unshift(summary)
+    rides.unshift({ ...summary, scenario: scenarioId, daily: dailyComplete })
     if (rides.length > 40) rides.length = 40
     recordMinutes(rideProgressData.days, today, summary.seconds)
     if (dailyComplete) rideProgressData.lastDaily = dailyDay
     persist()
   }
+  return { summary, today, dailyComplete, milestones }
+}
+
+function showCompletion() {
+  const { summary, today, dailyComplete, milestones } = recordCompletedRide()
   setText(element('completed-time'), clockText(summary.seconds, 'down'))
   setText(element('completed-laps'), String(summary.laps))
   setText(element('complete-note'), session.debugged ? 'Developer ride · omitted from ride history.' :
@@ -667,7 +729,7 @@ function easeRide() {
 }
 
 function openSettings() {
-  if (settings.open || finishConfirmation.open) return
+  if (settings.open) return
   shouldResume = session.phase === 'riding'
   pauseRide(false)
   showSettings()
@@ -675,13 +737,24 @@ function openSettings() {
   settings.showModal()
 }
 
-function openFinish() {
-  if ((session.phase !== 'riding' && session.phase !== 'paused') || settings.open || finishConfirmation.open) return
-  shouldResume = session.phase === 'riding'
-  pauseRide(false)
-  if (session.remaining === 0) return
-  finishConfirmation.returnValue = 'keep'
-  finishConfirmation.showModal()
+function returnToStart() {
+  session.reset()
+  world?.setMissionProgress()
+  if (scenarioId === 'thought' && thought) world?.setThought(thought, 0)
+  if (scenarioId === 'ideas' && lesson) world?.setLesson(lesson, 0)
+  showPhase()
+  start.focus({ preventScroll: true })
+}
+
+function finishRide() {
+  if ((session.phase !== 'riding' && session.phase !== 'paused') || settings.open) return
+  updateTime(performance.now())
+  if (session.remaining > 0) {
+    session.finish()
+    recordCompletedRide()
+  }
+  setText(announcement, session.debugged ? 'Ride ended.' : 'Ride saved.')
+  returnToStart()
 }
 
 function toggleMute() {
@@ -720,6 +793,161 @@ customInput.addEventListener('input', () => {
   showDuration()
 })
 
+thoughtQuestion.addEventListener('input', () => {
+  thoughtRequest?.abort()
+  thoughtRequest = undefined
+  thought = undefined
+  thoughtPlan.disabled = false
+  setText(thoughtStatus, '')
+  showDuration()
+})
+thoughtForm.addEventListener('submit', async event => {
+  event.preventDefault()
+  const question = thoughtQuestion.value.trim()
+  if (question.length < 6 || thoughtRequest) return
+  const request = new AbortController()
+  thoughtRequest = request
+  thoughtPlan.disabled = true
+  thought = undefined
+  setText(thoughtStatus, 'Waiting for ' + agentName + ' to research and plan your ride…')
+  showDuration()
+  try {
+    await providerReady
+    request.signal.throwIfAborted()
+    setText(thoughtStatus, 'Waiting for ' + agentName + ' to research and plan your ride…')
+    const { ride, provider, contextUsed } = await loadThoughtRide(question, request.signal)
+    if (thoughtRequest !== request) return
+    thought = ride
+    world?.setThought(thought, 0)
+    setText(thoughtStatus, provider + ' prepared ' + thought.laps.length + ' perspectives.' +
+      (contextUsed ? ' Matching notes included.' : ''))
+  } catch (error) {
+    if (thoughtRequest === request) setText(thoughtStatus, error instanceof Error ? error.message : 'Couldn’t plan this ride. Try again.')
+  } finally {
+    if (thoughtRequest === request) {
+      thoughtRequest = undefined
+      thoughtPlan.disabled = false
+      showDuration()
+    }
+  }
+})
+
+function showHistory() {
+  const list = element('ride-history-list')
+  const status = element('history-status')
+  element('no-ride-history').hidden = rides.length > 0
+  list.replaceChildren(...rides.map((ride, index) => {
+    const li = document.createElement('li')
+    const text = document.createElement('div')
+    const name = document.createElement('strong')
+    name.textContent = isScenarioId(ride.scenario) ? scenarios[ride.scenario].title.join(' ') : 'Ride'
+    const details = document.createElement('small')
+    details.textContent = new Date(ride.endedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) +
+      ' · ' + clockText(ride.seconds, 'down') + ' · ' + ride.laps + ' lap' + (ride.laps === 1 ? '' : 's')
+    text.append(name, details)
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.textContent = 'Delete'
+    remove.setAttribute('aria-label', 'Delete ' + name.textContent + ' from ' + details.textContent)
+    remove.addEventListener('click', () => {
+      const found = rides.indexOf(ride)
+      if (found < 0) return
+      const date = new Date(ride.endedAt)
+      const day = calendarDay(date)
+      const reset = rideProgressData.weekResetAt
+      if (!reset || date.getTime() > reset || weekStart(day) !== weekStart(calendarDay(new Date(reset)))) {
+        const seconds = Math.max(0, (rideProgressData.days[day] ?? 0) - ride.seconds)
+        if (seconds > 1e-6) rideProgressData.days[day] = seconds
+        else delete rideProgressData.days[day]
+      }
+      rides.splice(found, 1)
+      if (ride.seconds >= (rideProgressData.longest ?? 0)) rideProgressData.longest = Math.max(0, ...rides.map(item => item.seconds))
+      if (ride.daily && rideProgressData.lastDaily === day && !rides.some(item => item.daily && calendarDay(new Date(item.endedAt)) === day)) {
+        rideProgressData.lastDaily = undefined
+      }
+      persist()
+      showSettings()
+      showPlan()
+      showWeekly(element('finished-weekly-minutes'), element<HTMLProgressElement>('finished-weekly-progress'), calendarDay())
+      setText(status, 'Ride deleted. Weekly progress updated.')
+      const buttons = list.querySelectorAll('button')
+      ;(buttons[Math.min(index, buttons.length - 1)] ?? element('ride-history').querySelector('summary'))?.focus()
+    })
+    li.append(text, remove)
+    return li
+  }))
+}
+element('reset-goal').addEventListener('click', () => {
+  preferences.weeklyGoal = defaultPreferences().weeklyGoal
+  persist()
+  showSettings()
+  showPlan()
+  showWeekly(element('finished-weekly-minutes'), element<HTMLProgressElement>('finished-weekly-progress'), calendarDay())
+  setText(element('history-status'), 'Weekly goal reset to 60 minutes.')
+})
+element('reset-week').addEventListener('click', () => {
+  if (!window.confirm('Reset this week’s cycling minutes? Your individual rides will stay in history.')) return
+  const today = calendarDay()
+  for (let day = weekStart(today); day <= today; day++) delete rideProgressData.days[day]
+  rideProgressData.weekResetAt = Date.now()
+  persist()
+  showPlan()
+  showWeekly(element('finished-weekly-minutes'), element<HTMLProgressElement>('finished-weekly-progress'), today)
+  setText(element('history-status'), 'This week’s cycling minutes reset. Ride history kept.')
+})
+
+function showConceptStatus() {
+  if (topicRequest) setText(conceptStatus, 'Waiting for ' + agentName + ' to research and write the lesson…')
+  else if (lesson && lessonReady()) setText(conceptStatus, lessonProvider + ' prepared ' + lesson.chapters.length + ' laps from ' + lesson.sources.length + ' sources. Ready to ride.')
+  else setText(conceptStatus, 'Send your topic to the research agent. This can take a minute or two.')
+}
+
+conceptInput.addEventListener('input', () => {
+  topicRequest?.abort()
+  topicRequest = undefined
+  showConceptStatus()
+  showDuration()
+})
+conceptForm.addEventListener('submit', async event => {
+  event.preventDefault()
+  const query = conceptKey()
+  if (!query || topicRequest || lessonReady()) return
+  const request = topicRequest = new AbortController()
+  showConceptStatus()
+  showDuration()
+  try {
+    await providerReady
+    request.signal.throwIfAborted()
+    showConceptStatus()
+    const loaded = await loadLesson(conceptInput.value.trim(), request.signal)
+    if (topicRequest !== request) return
+    lesson = loaded.lesson
+    lessonProvider = loaded.provider
+    loadedConcept = query
+    topicRequest = undefined
+    world?.setLesson(lesson, 0)
+    showConceptStatus()
+  } catch (error) {
+    if (topicRequest !== request) return
+    topicRequest = undefined
+    setText(conceptStatus, error instanceof Error ? error.message : 'Couldn’t find enough material. Try a more specific topic.')
+  }
+  showDuration()
+})
+
+menu.addEventListener('click', event => {
+  if (event.target instanceof Element && event.target.closest('button')) menu.open = false
+})
+document.addEventListener('click', event => {
+  if (event.target instanceof Node && !menu.contains(event.target)) menu.open = false
+})
+menu.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && menu.open) {
+    event.stopPropagation()
+    menu.open = false
+    menu.querySelector('summary')!.focus()
+  }
+})
 scenarioPicker.addEventListener('change', () => {
   if (isScenarioId(scenarioPicker.value)) changeScenario(scenarioPicker.value)
   scenarioPicker.value = scenarioId
@@ -782,16 +1010,11 @@ document.addEventListener('fullscreenchange', () => {
   fullscreen.querySelector('use')?.setAttribute('href', active ? '#exit-fullscreen-icon' : '#fullscreen-icon')
   fullscreenNotice.hidden = true
 })
-element('tune-airwave').addEventListener('click', () => radio.show())
+element('tune-airwave').addEventListener('click', () => radio.show(true))
 element('open-settings').addEventListener('click', openSettings)
-element('finish-ride').addEventListener('click', openFinish)
+element('finish-ride').addEventListener('click', finishRide)
 element('ride-again').addEventListener('click', () => beginRide(session.duration / 60, dailyDay, session.isMission))
-element('return-start').addEventListener('click', () => {
-  session.reset()
-  world?.setMissionProgress()
-  showPhase()
-  start.focus({ preventScroll: true })
-})
+element('return-start').addEventListener('click', returnToStart)
 
 settings.addEventListener('close', () => { if (shouldResume) resumeRide() })
 weeklyGoalInput.addEventListener('input', () => {
@@ -806,13 +1029,6 @@ ghostEnabled.addEventListener('change', () => {
   persist()
   if (session.phase === 'paused') showRide()
 })
-finishConfirmation.addEventListener('close', () => {
-  if (finishConfirmation.returnValue === 'finish') {
-    session.finish()
-    showCompletion()
-  } else if (shouldResume) resumeRide()
-})
-
 efforts.forEach((effort, i) => {
   const input = element<HTMLInputElement>(`description-${i}`)
   input.addEventListener('input', () => {
@@ -825,6 +1041,10 @@ for (const field of audioFields) {
   const input = element<HTMLInputElement>(field)
   input.addEventListener('change', () => {
     preferences[field] = input.checked
+    if (field === 'music' && input.checked) {
+      radio.stop(false)
+      preferences.muted = false
+    }
     persist()
     audio.activate()
     showSound()
@@ -834,7 +1054,11 @@ musicStyleInput.addEventListener('change', () => {
   const style = musicStyleInput.value
   if (!isMusicStyle(style)) return
   preferences.musicStyle = style
+  preferences.music = true
+  preferences.muted = false
+  radio.stop(false)
   persist()
+  audio.activate()
   showSound()
 })
 musicVolumeInput.addEventListener('input', () => {
@@ -856,7 +1080,7 @@ element('visual-only').addEventListener('click', () => {
 })
 
 document.addEventListener('keydown', event => {
-  if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || settings.open || finishConfirmation.open) return
+  if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || settings.open) return
   const target = event.target
   if (target instanceof HTMLElement && target.closest('input,select,textarea,[contenteditable],summary,#ride-radio')) return
   const key = event.key.toLowerCase()
@@ -870,7 +1094,7 @@ document.addEventListener('keydown', event => {
     if (session.phase === 'paused') resumeRide()
     else pauseRide()
   } else if (key === 'e') easeRide()
-  else if (key === 'f') openFinish()
+  else if (key === 'f') finishRide()
   else if (key === 'm') toggleMute()
   else if (key === 's') openSettings()
 })
@@ -976,7 +1200,7 @@ function frame(now: number) {
     scenario.start + (session.laps + replayFraction) * route.length : undefined
   if (session.isMission && phase !== 'idle') world?.setMissionProgress(Math.min(1, session.distance / discoveryDistance))
   world?.draw(phase === 'idle' ? scenario.start : scenario.start + session.distance,
-    dt, phase === 'idle', phase === 'idle' || phase === 'riding', ghostDistance)
+    dt, phase === 'idle', phase === 'idle' || phase === 'riding', ghostDistance, phase === 'riding' || phase === 'paused')
   if (developer && ++frames && now - fpsSince >= 1000) {
     const fps = Math.round(frames * 1000 / (now - fpsSince))
     setText(element('fps'), `${fps} FPS · ${world?.renderCalls ?? 0} draws`)

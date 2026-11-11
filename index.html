@@ -28,18 +28,23 @@
   </svg>
   <div id="app" data-phase="idle">
     <canvas id="world" aria-label="Animated countryside road through Willowmere Valley"></canvas>
+    <div id="road-links" class="road-links"></div>
     <div class="screen-wash" aria-hidden="true"></div>
     <header class="masthead">
       <div class="wordmark">
         <span class="logo-ring"><svg><use href="#river-icon"/></svg></span>
         <span><strong>Riverloop</strong><small>SCENIC CYCLING</small></span>
       </div>
-      <div class="masthead-actions">
+      <details id="ride-menu" class="ride-menu">
+        <summary><span>Ride menu</span><span aria-hidden="true">▾</span></summary>
+        <div class="masthead-actions">
         <button type="button" id="fullscreen" class="fullscreen-button" aria-label="Fullscreen" title="Fullscreen"><svg class="icon" aria-hidden="true"><use href="#fullscreen-icon"/></svg><span>Fullscreen</span></button>
-        <button type="button" id="mute" class="icon-button" aria-label="Mute all sound" aria-pressed="false" title="Mute sound (M)"><svg class="icon"><use href="#sound-icon"/></svg></button>
+        <button type="button" id="mute" class="icon-button" aria-label="Mute all sound" aria-pressed="false" title="Mute sound (M)"><svg class="icon"><use href="#sound-icon"/></svg><span id="mute-label">Mute sound</span></button>
         <button type="button" id="open-radio" class="settings-button" aria-label="Ride Radio" aria-controls="ride-radio" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#radio-icon"/></svg><span>Ride Radio</span></button>
+        <button type="button" id="open-sources" class="settings-button" aria-controls="saved-sources" aria-expanded="false"><span>Read later</span></button>
         <button type="button" id="open-settings" class="settings-button" aria-label="Settings"><svg class="icon"><use href="#settings-icon"/></svg><span>Settings</span></button>
-      </div>
+        </div>
+      </details>
       <label class="scenario-picker" id="scenario-picker">
         <span>Ride scenario</span>
         <select id="scenario">
@@ -51,6 +56,11 @@
           <option value="airwave">Airwave Coast</option>
           <option value="folio">Folio Quarter</option>
           <option value="aurora">Aurora Divide</option>
+          <option value="ideas">Idea Circuit</option>
+          <option value="gacka">Gacka Valley</option>
+          <option value="ponsonby">Ponsonby Ridge</option>
+          <option value="thought">Thought Circuit</option>
+          <option value="art">Art History</option>
         </select>
       </label>
     </header>
@@ -62,6 +72,18 @@
           <h1 id="start-title"><span id="scenario-first">Willowmere</span><br><em id="scenario-last">Valley</em></h1>
           <p class="intro" id="scenario-intro">Follow the river through quiet woods, across a timber bridge, and into a village in the late afternoon sun.</p>
           <button type="button" id="tune-airwave" class="text-button" hidden><svg class="icon" aria-hidden="true"><use href="#radio-icon"/></svg> Tune in to Ride Radio</button>
+          <form id="concept-form" class="concept-form" hidden>
+            <label for="concept">What do you want to learn?</label>
+            <div><input id="concept" type="text" maxlength="100" required placeholder="e.g. plate tectonics"><button type="submit">Load topic</button></div>
+            <p id="concept-status" role="status"></p>
+          </form>
+          <form id="thought-form" class="concept-form thought-form" hidden>
+            <label for="thought-question">What are you thinking through?</label>
+            <textarea id="thought-question" required minlength="6" maxlength="190" rows="2" placeholder="A decision, problem, or idea you’re stuck on"></textarea>
+            <button type="submit" id="plan-thought">Plan thinking ride</button>
+            <p>Your question and any matching local notes go to the research agent.</p>
+            <p id="thought-status" role="status"></p>
+          </form>
           <div class="mode-picker">
             <label for="ride-mode">Ride mode</label>
             <select id="ride-mode"><option value="scenic">Scenic</option><option value="steady">Steady</option><option value="hills">Rolling Hills</option></select>
@@ -157,6 +179,7 @@
               <span class="eyebrow"><svg class="icon" aria-hidden="true"><use href="#heart-icon"/></svg> HEART RATE</span><strong id="heart-bpm">—</strong><small>BPM</small>
             </div>
           </div>
+          <p class="lesson-chapter" id="lesson-chapter" role="status" hidden></p>
           <p class="mission-status" id="mission-status" hidden></p>
           <p class="turn-cue" id="turn-cue" hidden></p>
           <div class="hud-panel effort-panel" id="effort-panel" data-effort="Easy">
@@ -179,6 +202,19 @@
             </div>
           </div>
         </div>
+        <aside id="art-gallery" class="art-gallery" aria-labelledby="art-gallery-title" hidden>
+          <figure><img alt=""></figure>
+          <div class="art-caption">
+            <p class="art-period"></p>
+            <h2 id="art-gallery-title"></h2>
+            <p class="art-credit"></p>
+            <p class="art-observation"></p>
+            <div class="art-actions">
+              <button type="button" id="hold-artwork" aria-pressed="false">Hold artwork</button>
+              <button type="button" id="save-artwork">Save for later</button>
+            </div>
+          </div>
+        </aside>
         <div id="warning" class="warning" hidden aria-live="polite"><span class="badge-dot"></span><strong id="warning-text"></strong><span id="warning-count" aria-hidden="true"></span></div>
         <div class="discovery-toast" id="discovery-toast" hidden>
           <svg class="icon" aria-hidden="true"><use href="#pin-icon"/></svg>
@@ -235,19 +271,51 @@
         <button type="button" id="jump-effort">Jump to next effort warning</button>
         <button type="button" id="jump-lap">Jump near lap end</button>
       </aside>
+      <p id="source-notice" class="source-notice" role="status" hidden></p>
+      <aside id="saved-sources" class="saved-sources" aria-labelledby="saved-sources-title" hidden>
+        <header><h2 id="saved-sources-title">Read later</h2><button type="button" aria-label="Close read later">Close</button></header>
+        <p>Click a roadside board with ↗ to save it here. Open your saved links when you’re ready.</p>
+        <p id="no-sources">No sources saved yet.</p>
+        <ul></ul>
+      </aside>
       <aside id="ride-radio" class="ride-radio" aria-labelledby="radio-title" hidden>
         <div class="radio-heading">
-          <div><span class="eyebrow">RIVERLOOP · LISTEN WHILE YOU RIDE</span><h2 id="radio-title" tabindex="-1">Ride Radio</h2></div>
+          <h2 id="radio-title" tabindex="-1">Ride Radio</h2>
           <button type="button" id="close-radio" class="icon-button" aria-label="Close Ride Radio"><svg class="icon" aria-hidden="true"><use href="#close-icon"/></svg></button>
         </div>
+        <details class="radio-music" id="radio-music" open>
+          <summary>Electronic music</summary>
+          <label class="radio-music-toggle"><input id="music" type="checkbox"> Play music during the ride</label>
+          <label class="music-choice">Music style <select id="music-style">
+            <option value="random">Random</option>
+            <option value="drift">Ambient synth</option>
+            <option value="fogbloom">Fog Bloom · Evolving ambient</option>
+            <option value="pulse">Downtempo electronic</option>
+            <option value="arps">Melodic arpeggios</option>
+            <option value="synthwave">Synthwave</option>
+            <option value="house">Deep house</option>
+            <option value="techno">Minimal techno</option>
+            <option value="breaks">Drum &amp; bass</option>
+            <optgroup label="Tech house">
+              <option value="afterhours">Afterhours</option>
+              <option value="harbor">Harbor Signal</option>
+              <option value="nightshift">Night Shift</option>
+            </optgroup>
+          </select></label>
+          <div class="music-choice">
+            <label for="music-volume">Music volume</label>
+            <input id="music-volume" type="range" min="0" max="100" value="50" aria-valuetext="50%">
+            <output id="music-volume-value" for="music-volume">50%</output>
+          </div>
+        </details>
         <div id="radio-video" class="radio-video" hidden></div>
         <div id="radio-now" class="radio-actions" hidden>
           <button type="button" id="radio-next">Next video</button>
           <button type="button" id="radio-stop">Stop video</button>
           <a id="radio-source" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">Watch on YouTube ↗</a>
         </div>
-        <details id="radio-options" open>
-          <summary>Choose or swap a video</summary>
+        <details id="radio-options">
+          <summary>YouTube</summary>
           <label for="radio-choice">AI talks and saved links</label>
           <div class="radio-field"><select id="radio-choice"></select><button type="button" id="radio-play">Load video</button></div>
           <form class="radio-form">
@@ -273,6 +341,10 @@
           <span><input id="weekly-goal" type="number" min="5" max="600" step="1" value="60" inputmode="numeric" aria-describedby="weekly-goal-hint"> min</span>
         </div>
         <small id="weekly-goal-hint">5–600 minutes. Your week starts on Monday.</small>
+        <div class="history-actions">
+          <button type="button" id="reset-goal">Reset goal to 60 min</button>
+          <button type="button" id="reset-week">Reset this week’s minutes</button>
+        </div>
         <label class="ghost-setting"><input id="ghost-enabled" type="checkbox"> Ride with my last-lap ghost</label>
         <small>Finish a lap on a route to record its ghost. Simulated and sensor laps are kept separate.</small>
       </fieldset>
@@ -297,30 +369,8 @@
         <div class="sound-options">
           <label><input id="ambient" type="checkbox"> Ambient sound</label>
           <label><input id="speech" type="checkbox"> Spoken cues</label>
-          <label><input id="music" type="checkbox"> Electronic music</label>
           <label><input id="cycling" type="checkbox"> Cycling sounds</label>
           <label><input id="muted" type="checkbox"> Mute all</label>
-        </div>
-        <label class="music-choice">Music style <select id="music-style">
-          <option value="random">Random</option>
-          <option value="drift">Ambient synth</option>
-          <option value="fogbloom">Fog Bloom · Evolving ambient</option>
-          <option value="pulse">Downtempo electronic</option>
-          <option value="arps">Melodic arpeggios</option>
-          <option value="synthwave">Synthwave</option>
-          <option value="house">Deep house</option>
-          <option value="techno">Minimal techno</option>
-          <option value="breaks">Drum &amp; bass</option>
-          <optgroup label="Tech house">
-            <option value="afterhours">Afterhours</option>
-            <option value="harbor">Harbor Signal</option>
-            <option value="nightshift">Night Shift</option>
-          </optgroup>
-        </select></label>
-        <div class="music-choice">
-          <label for="music-volume">Music volume</label>
-          <input id="music-volume" type="range" min="0" max="100" value="50" aria-valuetext="50%">
-          <output id="music-volume-value" for="music-volume">50%</output>
         </div>
         <div class="sound-note"><small>Cycling sounds add drivetrain and breathing. Spoken cues use an installed English voice.</small>
           <button type="button" class="text-button" id="visual-only">Visual only</button></div>
@@ -334,20 +384,18 @@
         <summary>Keyboard shortcuts</summary>
         <p><kbd>Space</kbd> Pause or resume · <kbd>E</kbd> Make easier · <kbd>F</kbd> Finish · <kbd>M</kbd> Mute · <kbd>S</kbd> Settings</p>
       </details>
+      <details class="ride-history" id="ride-history">
+        <summary>Ride history</summary>
+        <p id="no-ride-history">No saved rides yet.</p>
+        <ul id="ride-history-list"></ul>
+      </details>
+      <p id="history-status" role="status"></p>
       <p id="previous-ride" class="previous-ride" hidden></p>
       <div id="developer-settings" class="developer-settings" hidden>
         <button type="button" class="text-button" id="reset-preferences">Reset saved preferences</button>
         <small id="reset-status" role="status"></small>
       </div>
       <button class="primary settings-done" value="close">Done <svg class="icon"><use href="#arrow-icon"/></svg></button>
-    </form>
-  </dialog>
-  <dialog id="finish-confirmation" class="modal finish-modal" aria-labelledby="finish-title">
-    <form method="dialog" class="modal-body">
-      <div class="modal-heading"><div><span class="eyebrow" data-scenario-name>WILLOWMERE VALLEY</span><h2 id="finish-title">Finish this ride?</h2></div></div>
-      <p>Your summary will show the time and laps you completed.</p>
-      <button class="primary" value="finish">Finish ride</button>
-      <button class="secondary" value="keep" autofocus>Keep riding</button>
     </form>
   </dialog>
   <div class="visually-hidden" id="announcement" role="status"></div>

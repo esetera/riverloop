@@ -1,6 +1,6 @@
 import { LoopRoute, smoothstep, startingDistance } from './route.ts'
 
-export const scenarioIds = ['valley', 'coast', 'cyber', 'echo', 'machine', 'airwave', 'folio', 'aurora'] as const
+export const scenarioIds = ['valley', 'coast', 'cyber', 'echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art'] as const
 export type ScenarioId = typeof scenarioIds[number]
 type Scenario = {
   number: string
@@ -88,6 +88,60 @@ export function auroraGround(x: number, z: number) {
     + hill(188, -121, 58, 68) + hill(-207, 124, 82, 48) + hill(153, 163, 98, 56)
 }
 
+const ideaLoop: [number, number][] = [
+  [-67, 58], [-34, 49], [5, 51], [45, 35], [69, 6], [66, -30],
+  [37, -52], [-8, -47], [-43, -56], [-71, -44], [-87, -10], [-86, 25],
+]
+const gacka: [number, number][] = [
+  [-127, 47], [-88, 45], [-50, 40], [-12, 37], [29, 37], [65, 29], [92, 13],
+  [106, -9], [102, -34], [67, -55], [15, -61], [-34, -54], [-79, -51], [-130, -50], [-151, -27], [-148, 16],
+]
+const ponsonby: [number, number][] = [
+  [-57, 116], [-58, 75], [-56, 28], [-54, -20], [-46, -65], [-35, -104], [-20, -128],
+  [12, -129], [45, -115], [61, -93], [63, -60], [65, -20], [76, 18],
+  [77, 57], [68, 92], [45, 114], [16, 123], [-25, 124],
+]
+export const gackaWater = -.2
+export function gackaRiver(z: number) { return 5 + 10 * Math.sin(z / 24) + 9 * Math.cos(z / 55) }
+export function gackaGround(x: number, z: number) {
+  const hill = (cx: number, cz: number, rx: number, rz: number, height: number) =>
+    height * Math.exp(-(((x - cx) / rx) ** 2 + ((z - cz) / rz) ** 2))
+  const flat = .68 + .37 * Math.sin(x / 36) * Math.cos(z / 26) + .3 * Math.sin(z / 65)
+  const ridge = hill(-238, -166, 81, 75, 52) + hill(-166, -217, 57, 72, 83)
+    + hill(-83, -221, 72, 62, 95) + hill(7, -222, 53, 81, 75) + hill(96, -208, 69, 77, 68)
+    + hill(181, -181, 76, 71, 50) + hill(220, 85, 97, 88, 30) + hill(-244, 133, 97, 92, 45)
+  const channel = Math.abs(x - gackaRiver(z)) - (6 + 16 * Math.exp(-(((z - 3) / 22) ** 2)))
+  const water = smoothstep(-3, 3, channel) + smoothstep(140, 162, Math.abs(z))
+  return -1.4 + Math.min(1, water) * (flat + ridge + 1.4)
+}
+export function ponsonbyGround(x: number, z: number) {
+  return 2.3 + 12.5 * Math.exp(-(((x + 61 - z * .09) / 96) ** 2))
+    + 2.8 * Math.sin((z + 115) / 63) + 1.7 * Math.cos((x + z) / 37)
+}
+
+const thought: [number, number][] = [
+  [-54, 63], [-14, 52], [29, 50], [67, 32], [81, -2], [78, -34],
+  [38, -58], [-7, -61], [-51, -54], [-88, -30], [-99, 4], [-83, 41],
+]
+export function thoughtGround(x: number, z: number) {
+  const edge = Math.max(0, Math.hypot((x + 4) / 170, (z + 5) / 127) - .68)
+  return .6 + 1.7 * Math.sin(x / 39 + z / 28) + .88 * Math.cos(z / 23)
+    + 54 * Math.min(1.8, edge ** 2) * (.68 + .32 * Math.cos(z / 48 + x / 81) ** 2)
+}
+
+const art: [number, number][] = [
+  [-113, 90], [-51, 75], [14, 79], [69, 101], [122, 87], [145, 43],
+  [135, -9], [99, -48], [54, -82], [-8, -104], [-72, -89], [-113, -55],
+  [-140, -13], [-150, 36], [-141, 72],
+]
+
+export function artGround(x: number, z: number) {
+  const edge = Math.max(0, Math.hypot(x / 181, z / 145) - 1)
+  const terrace = 6.2 * Math.exp(-(((x - 113) / 58) ** 2 + ((z + 51) / 63) ** 2))
+  return .65 + .55 * Math.sin(x / 46 + z / 39) + .52 * Math.cos(z / 44)
+    + terrace + 21 * Math.min(1.8, edge ** 2)
+}
+
 export const scenarios: Record<ScenarioId, Scenario> = {
   valley: {
     number: '01', title: ['Willowmere', 'Valley'], start: startingDistance,
@@ -152,6 +206,46 @@ export const scenarios: Record<ScenarioId, Scenario> = {
     discovery: { name: 'Prism Gate', at: 253 },
     mission: { name: 'Cross the Night', description: 'Climb to the prism gate as the northern lights gather.', arrival: 'The northern lights open above Prism Gate.' },
     makeRoute: () => new LoopRoute(aurora, (x, z) => auroraGround(x, z) + .52),
+  },
+  ideas: {
+    number: '09', title: ['Idea', 'Circuit'], start: 7,
+    description: 'Pick a concept. Ride a short loop through a moonlit observatory where each lap reveals a deeper lesson.',
+    landmarks: 'OBSERVATORY · LESSON WALLS · RECALL GATE',
+    discovery: { name: 'Recall Gate', at: 344 },
+    mission: { name: 'Go a little deeper', description: 'Look for a definition, new details, and a recall question on each lap.', arrival: 'You reached the Recall Gate.' },
+    makeRoute: () => new LoopRoute(ideaLoop, (x, z) => auroraGround(x, z) + .52),
+  },
+  gacka: {
+    number: '10', title: ['Gacka', 'Valley'], start: 7,
+    description: 'Follow the green spring water past Sinac’s wooden mills. Cross the valley floor beneath the limestone ridges of Lika, Croatia.',
+    landmarks: 'SINAC · MAJEROVO VRILO · GACKA RIVER',
+    discovery: { name: 'Majerovo Vrilo', at: 156 },
+    mission: { name: 'To the spring mills', description: 'Cross the Gacka and look for the wooden mlinice at Majerovo Vrilo.', arrival: 'The mill wheels are turning at Majerovo Vrilo.' },
+    makeRoute: () => new LoopRoute(gacka, (x, z) => Math.max(.85, gackaGround(x, z) + .22)),
+  },
+  ponsonby: {
+    number: '11', title: ['Ponsonby', 'Ridge'], start: 6,
+    description: 'Climb Auckland’s Ponsonby Road past verandas and villas, loop around Three Lamps, then coast back along leafy Western Park.',
+    landmarks: 'PONSONBY ROAD · THREE LAMPS · WESTERN PARK',
+    discovery: { name: 'Three Lamps', at: 244 },
+    mission: { name: 'Up to Three Lamps', description: 'Follow the ridgeline to the lamps by the old Ponsonby Post Office.', arrival: 'You’ve reached Three Lamps.' },
+    makeRoute: () => new LoopRoute(ponsonby, (x, z) => ponsonbyGround(x, z) + .30),
+  },
+  thought: {
+    number: '12', title: ['Thought', 'Circuit'], start: 7,
+    description: 'Bring a question to a sun-baked sculpture garden. Pass prompts, tradeoffs, and experiments that help you find a next step.',
+    landmarks: 'PAPER CANYON · SCULPTURE GARDEN · DECISION GATE',
+    discovery: { name: 'Decision Gate', at: 348 },
+    mission: { name: 'Find your next move', description: 'Take a question through four perspectives, from framing it to picking a small test.', arrival: 'You reached the Decision Gate.' },
+    makeRoute: () => new LoopRoute(thought, (x, z) => thoughtGround(x, z) + .30),
+  },
+  art: {
+    number: '13', title: ['Art', 'History'], start: 6,
+    description: 'Ride through a garden gallery at dusk. Eight artworks trace nearly 3,000 years, from an Egyptian funerary papyrus to Kandinsky’s early abstraction.',
+    landmarks: 'ARTWORKS · GARDEN PAVILIONS · REFLECTING POOLS',
+    discovery: { name: 'Modern Gallery', at: 771 },
+    mission: { name: 'Ride through art history', description: 'Look for one detail in each work as you ride toward the Modern Gallery.', arrival: 'You reached the Modern Gallery.' },
+    makeRoute: () => new LoopRoute(art, (x, z) => artGround(x, z) + .24),
   },
 }
 
