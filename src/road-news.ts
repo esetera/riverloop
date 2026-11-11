@@ -1,8 +1,9 @@
 import type { Scene } from 'three'
 import { isAhead, makeBillboard } from './roadside-billboards.ts'
 import type { LoopRoute } from './route.ts'
+import { sourceURL } from './road-links.ts'
 
-export type Story = { title: string; source: string; date: string }
+export type Story = { title: string; source: string; date: string; url?: string }
 type Channel = { label: string; color: string; days: number; fetch: () => Promise<Story[]> }
 type Entry = { updated: number; stories: Story[] }
 type Feed = Record<string, Entry | undefined>
@@ -15,9 +16,9 @@ function clean(value: string) {
   return value.replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 180)
 }
 
-export function story(title: unknown, source: string, time: unknown): Story[] {
+export function story(title: unknown, source: string, time: unknown, url?: unknown): Story[] {
   if (typeof title !== 'string' || !clean(title) || typeof time !== 'string' || !Number.isFinite(Date.parse(time))) return []
-  return [{ title: clean(title), source: clean(source), date: new Date(time).toISOString() }]
+  return [{ title: clean(title), source: clean(source), date: new Date(time).toISOString(), url: sourceURL(url) }]
 }
 
 export function recentStories(stories: Story[], days: number, now = Date.now()) {
@@ -36,13 +37,14 @@ export async function getJSON<T>(url: string): Promise<T> {
 export async function hackerNews(query: string, days: number, matches: (title: string, domain: string) => boolean) {
   const filters = 'created_at_i>' + Math.floor((Date.now() - days * day) / 1000) + ',points>1'
   const params = new URLSearchParams({ query, tags: 'story', numericFilters: filters, hitsPerPage: '30' })
-  const data = await getJSON<{ hits: { title: string; url?: string; created_at: string }[] }>(
+  const data = await getJSON<{ hits: { title: string; url?: string; objectID: string; created_at: string }[] }>(
     'https://hn.algolia.com/api/v1/search_by_date?' + params)
   return data.hits.flatMap(hit => {
     let domain = 'Hacker News'
     try { domain = new URL(hit.url ?? '').hostname.replace(/^www\./, '') } catch { /* Text discussion. */ }
     if (!matches(hit.title ?? '', domain)) return []
-    return story(hit.title, domain === 'Hacker News' ? domain : domain + ' via HN', hit.created_at)
+    return story(hit.title, domain === 'Hacker News' ? domain : domain + ' via HN', hit.created_at, sourceURL(hit.url) ??
+      (/^\d+$/.test(hit.objectID) ? 'https://news.ycombinator.com/item?id=' + hit.objectID : undefined))
   })
 }
 
@@ -55,7 +57,7 @@ export async function combine(fetches: Promise<Story[]>[]) {
 export function roadsideNews(
   kind: 'machine' | 'folio', district: string, slots: readonly Slot[], channels: Record<string, Channel>,
 ) {
-  const storeKey = 'riverloop.' + kind + '-feed.v1'
+  const storeKey = 'riverloop.' + kind + '-feed.v2'
   let feed: Feed | undefined
   let nextRefresh = 0
   const channelKeys = Object.keys(channels)
@@ -68,7 +70,7 @@ export function roadsideNews(
         const entry = parsed?.[channel]
         if (!Array.isArray(entry?.stories) || !Number.isFinite(entry.updated) || entry.updated > Date.now()) continue
         const stories = entry.stories.slice(0, 6).flatMap((item: Story) =>
-          typeof item?.source === 'string' ? story(item.title, item.source, item.date) : [])
+          typeof item?.source === 'string' ? story(item.title, item.source, item.date, item.url) : [])
         checked[channel] = { updated: entry.updated, stories: recentStories(stories, channels[channel].days) }
       }
       return checked
@@ -138,6 +140,7 @@ export function roadsideNews(
           paint({
             label: district + '  /  ' + channels[channel].label,
             accent: channels[channel].color,
+            url: item?.url,
             title: item?.title ?? (waiting ? 'Connecting to the wire…' : 'No recent dispatch'),
             footer: item ? item.source + '  /  ' + item.date.slice(0, 10) + (cached ? '  /  CACHED' : '')
               : waiting ? 'SIGNAL ACQUISITION' : 'CHECKING FOR NEW STORIES',

@@ -8,6 +8,7 @@ export type GhostKey = `${ScenarioId}:${'cadence' | 'simulated'}`
 export type RideProgress = {
   days: Record<number, number>
   lastDaily?: number
+  weekResetAt?: number
   discovered: ScenarioId[]
   ghosts: Partial<Record<GhostKey, number[]>>
   missions?: ScenarioId[]
@@ -19,12 +20,16 @@ export function calendarDay(date = new Date()) {
   return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000
 }
 
+const dailyRoutes = scenarioIds.filter(id => id !== 'ideas' && id !== 'thought')
 export function dailyRoute(day: number) {
-  return scenarioIds[((day % scenarioIds.length) + scenarioIds.length) % scenarioIds.length]
+  return dailyRoutes[((day % dailyRoutes.length) + dailyRoutes.length) % dailyRoutes.length]
 }
 
+export function weekStart(today: number) {
+  return today - (((today + 3) % 7 + 7) % 7)
+}
 export function weekSeconds(days: RideProgress['days'], today: number) {
-  const monday = today - (((today + 3) % 7 + 7) % 7)
+  const monday = weekStart(today)
   let seconds = 0
   for (let day = monday; day <= today; day++) seconds += days[day] ?? 0
   return seconds

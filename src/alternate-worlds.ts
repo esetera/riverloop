@@ -16,6 +16,8 @@ export type CourseScene = {
   shadows: boolean
   startRide?: () => void
   signAhead?: (distance: number) => boolean
+  setThought?: (ride: import('./thinking.ts').ThoughtRide, lap: number) => void
+  setLesson?: (lesson: import('./lessons.ts').Lesson, lap: number) => void
 }
 
 type Block = {
@@ -80,18 +82,24 @@ function stripe(scene: T.Scene, route: LoopRoute, left: number, right: number, h
   scene.add(new T.Mesh(geometry, material))
 }
 
-export function pavedRoad(scene: T.Scene, route: LoopRoute, night: boolean, surface?: 'folio' | 'ice') {
-  const shoulder = surface === 'folio' ? '#b38169' : surface === 'ice' ? '#728da0' : night ? '#323c58' : '#898b82'
-  const road = surface === 'folio' ? '#704852' : surface === 'ice' ? '#253e57' : night ? '#202735' : '#575d5c'
-  const edge = surface === 'folio' ? '#eac695' : surface === 'ice' ? '#a6efed' : night ? '#57ddea' : '#f2eee0'
+export function pavedRoad(scene: T.Scene, route: LoopRoute, night: boolean, surface?: 'folio' | 'ice' | 'ponsonby' | 'thought') {
+  const shoulder = surface === 'thought' ? '#b37d88' : surface === 'folio' ? '#b38169' : surface === 'ice' ? '#728da0' : surface === 'ponsonby' ? '#b0aca2' : night ? '#323c58' : '#898b82'
+  const road = surface === 'thought' ? '#352c49' : surface === 'folio' ? '#704852' : surface === 'ice' ? '#253e57' : night ? '#202735' : '#575d5c'
+  const edge = surface === 'thought' ? '#ffdab1' : surface === 'folio' ? '#eac695' : surface === 'ice' ? '#a6efed' : night ? '#57ddea' : '#f2eee0'
   stripe(scene, route, -4.05, 4.05, -.012, shoulder)
   stripe(scene, route, -3.28, 3.28, 0, road, { texture: true })
   for (const side of [-1, 1]) {
+    if (surface === 'ponsonby') {
+      const kerb = [4.02 * side, 4.26 * side].sort((a, b) => a - b)
+      const walk = [4.26 * side, 6.27 * side].sort((a, b) => a - b)
+      stripe(scene, route, kerb[0], kerb[1], .095, '#ded8c5')
+      stripe(scene, route, walk[0], walk[1], .087, '#a9a092', { texture: true })
+    }
     const offset = side * 3.05
     stripe(scene, route, offset - .055, offset + .055, .013, edge, { glow: night })
     if (night) stripe(scene, route, side * 3.55 - .07, side * 3.55 + .07, .013, '#b561cd', { glow: true })
   }
-  stripe(scene, route, -.075, .075, .014, surface === 'ice' ? '#c5eaff' : night ? '#f5a161' : '#e9bf70', { gap: 2, glow: night })
+  stripe(scene, route, -.075, .075, .014, surface === 'ice' ? '#c5eaff' : surface === 'ponsonby' ? '#fff7e4' : night ? '#f5a161' : '#e9bf70', { gap: 2, glow: night })
 }
 
 function shoreTerrain(scene: T.Scene) {
@@ -317,11 +325,11 @@ function addAirwaveStation(scene: T.Scene, route: LoopRoute) {
     return ring
   })
   scene.add(signal)
-  for (const [distance, side, title, footer] of [
-    [routeStart + 44, -1, 'What are you listening to?', 'TUNE IN  /  RIDE RADIO'],
-    [scenarios.airwave.discovery.at - 27, -1, 'Airwave Station', 'YOU’RE ON THE COASTAL FREQUENCY'],
+  for (const [distance, side, title, footer, url] of [
+    [routeStart + 44, -1, 'What are you listening to?', 'TUNE IN  /  RIDE RADIO', 'https://www.youtube.com/playlist?list=UUKelCK4ZaO6HeEI1KQjqzWA'],
+    [scenarios.airwave.discovery.at - 27, -1, 'Airwave Station', 'YOU’RE ON THE COASTAL FREQUENCY', 'https://www.youtube.com/watch?v=7xTGNNLPyMI'],
   ] as const) {
-    makeBillboard(scene, route, distance, side, 'airwave')({ label: 'AIRWAVE COAST  /  FM', title, footer, accent: '#ffc6c3' })
+    makeBillboard(scene, route, distance, side, 'airwave')({ label: 'AIRWAVE COAST  /  FM', title, footer, url, accent: '#ffc6c3' })
   }
   return (time: number) => rings.forEach((ring, i) => {
     const progress = (time * .23 + i / rings.length) % 1

@@ -10,6 +10,13 @@ import { makeAuroraScene } from './aurora-world.ts'
 import { LoopRoute, RouteClearance, smoothstep } from './route.ts'
 import { makeGhostCyclist } from './ghost.ts'
 import type { ScenarioId } from './scenarios.ts'
+import { roadPanels } from './roadside-billboards.ts'
+import type { Lesson } from './lessons.ts'
+import type { RoadSource } from './road-links.ts'
+import { makeThoughtScene } from './thought-world.ts'
+import { makeArtScene } from './art-world.ts'
+import type { ThoughtRide } from './thinking.ts'
+import { makeGackaScene, makePonsonbyScene } from './place-worlds.ts'
 import type { Quality } from './storage.ts'
 
 const pixelRatios: Record<Quality, number> = { light: .78, balanced: 1.25, high: 2 }
@@ -92,6 +99,8 @@ const scenery: Record<ScenarioId, (route: LoopRoute) => CourseScene> = {
   valley: makeValleyScene, coast: makeCoastScene, cyber: makeCyberScene,
   echo: makeEchoScene, machine: route => makeCyberScene(route, true),
   airwave: route => makeCoastScene(route, true), folio: makeFolioScene, aurora: makeAuroraScene,
+  ideas: route => makeAuroraScene(route, true), gacka: makeGackaScene, ponsonby: makePonsonbyScene,
+  thought: makeThoughtScene, art: makeArtScene,
 }
 function makeCourse(route: LoopRoute, scenario: ScenarioId) {
   const course = scenery[scenario](route)
@@ -124,6 +133,11 @@ export class RideWorld {
   private readonly camera = new T.PerspectiveCamera(58, 1, .08, 1500)
   private readonly renderer: T.WebGLRenderer
   private readonly destination = new T.Vector3()
+  private readonly links = document.querySelector<HTMLElement>('#road-links')!
+  private readonly forward = new T.Vector3()
+  private readonly offset = new T.Vector3()
+  private readonly projected = Array.from({ length: 4 }, () => new T.Vector3())
+  private linkElements: HTMLAnchorElement[] = []
   private course: CourseScene
   private ghost: T.Group
   private previewMix = 1
@@ -131,7 +145,7 @@ export class RideWorld {
   private quality: Quality = 'balanced'
   private missionProgress?: number
 
-  constructor(private readonly canvas: HTMLCanvasElement, private route: LoopRoute, scenario: ScenarioId = 'valley') {
+  constructor(private readonly canvas: HTMLCanvasElement, private route: LoopRoute, private scenario: ScenarioId = 'valley', private readonly saveSource?: (source: RoadSource) => void, private readonly onExplain?: () => void) {
     this.renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'default' })
     this.renderer.toneMapping = T.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.08
@@ -148,8 +162,11 @@ export class RideWorld {
     const next = makeCourse(route, scenario)
     disposeScene(this.course)
     this.course = next
+    this.links.replaceChildren()
+    this.linkElements = []
     this.ghost = makeGhostCyclist(next.scene)
     this.route = route
+    this.scenario = scenario
     this.previewMix = 1
     this.sceneryTime = 0
     this.missionProgress = undefined
@@ -187,15 +204,16 @@ export class RideWorld {
     this.renderer.setSize(width, height, false)
   }
 
-  draw(distance: number, dt: number, preview: boolean, animate: boolean, ghostDistance?: number) {
+  draw(distance: number, dt: number, preview: boolean, animate: boolean, ghostDistance?: number, linkable = false) {
     if (animate) this.sceneryTime += Math.min(dt, .075)
     if (animate) this.previewMix = T.MathUtils.damp(this.previewMix, preview ? 1 : 0, 4.0, Math.min(dt, .08))
     const frame = this.route.frameAt(distance)
+    const lane = this.scenario === 'ponsonby' ? -1.13 : .57
     const eye = this.camera.position.copy(frame.point)
-      .addScaledVector(frame.right, T.MathUtils.lerp(.57, -2.0, this.previewMix))
+      .addScaledVector(frame.right, T.MathUtils.lerp(lane, -2.0, this.previewMix))
     eye.y += T.MathUtils.lerp(1.79, 4.05, this.previewMix)
     const future = this.route.pointAt(distance + 21, this.destination)
-    future.addScaledVector(frame.right, T.MathUtils.lerp(.32, -5.8, this.previewMix))
+    future.addScaledVector(frame.right, T.MathUtils.lerp(lane * .56, -5.8, this.previewMix))
     future.y = eye.y + (future.y - frame.point.y) * T.MathUtils.lerp(.84, .46, this.previewMix)
       - T.MathUtils.lerp(.42, 1.12, this.previewMix)
     this.camera.lookAt(future)
@@ -208,7 +226,69 @@ export class RideWorld {
     }
     this.course.animate(this.sceneryTime, eye)
     this.renderer.render(this.course.scene, this.camera)
+    this.drawLinks(linkable)
   }
+
+  private drawLinks(enabled: boolean) {
+    this.links.hidden = !enabled
+    if (!enabled) return
+    const panels = roadPanels(this.course.scene)
+    if (!panels.length) return
+    const width = this.canvas.clientWidth, height = this.canvas.clientHeight
+    this.camera.getWorldDirection(this.forward)
+    panels.forEach(({ source, corners, normal, prompt }, i) => {
+      let link = this.linkElements[i]
+      const offset = this.offset.copy(corners[0]).sub(this.camera.position)
+      if (!source || offset.lengthSq() > 90 ** 2 || offset.dot(normal) >= 0 ||
+          corners.some(corner => this.offset.copy(corner).sub(this.camera.position).dot(this.forward) < 1)) {
+        if (link) link.hidden = true
+        return
+      }
+      const points = corners.map((corner, j) => this.projected[j].copy(corner).project(this.camera))
+      const xs = points.map(point => (point.x + 1) * width / 2)
+      const ys = points.map(point => (1 - point.y) * height / 2)
+      const left = Math.min(...xs), top = Math.min(...ys)
+      const w = Math.max(...xs) - left, h = Math.max(...ys) - top
+      if (left > width || top > height || left + w < 0 || top + h < 0 || w < 18 || h < 12) {
+        if (link) link.hidden = true
+        return
+      }
+      if (!link) {
+        link = document.createElement('a')
+        link.target = '_blank'
+        link.rel = 'noopener noreferrer'
+        link.addEventListener('click', event => {
+          const current = roadPanels(this.course.scene)[i]
+          if (!current?.source) return event.preventDefault()
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+          event.preventDefault()
+          if (current.explain) {
+            current.explain()
+            this.onExplain?.()
+          } else this.saveSource?.(current.source)
+        })
+        this.links.append(link)
+        this.linkElements[i] = link
+      }
+      if (link.href !== source.url) link.href = source.url
+      const title = prompt ? 'Break down: ' + prompt : 'Save for later: ' + source.title
+      if (link.dataset.title !== title) {
+        link.dataset.title = title
+        link.setAttribute('aria-label', title)
+        link.title = title
+      }
+      link.style.left = left + 'px'
+      link.style.top = top + 'px'
+      link.style.width = w + 'px'
+      link.style.height = h + 'px'
+      link.style.clipPath = 'polygon(' + xs.map((x, j) => (x - left) + 'px ' + (ys[j] - top) + 'px').join(',') + ')'
+      link.hidden = false
+    })
+  }
+
+  setThought(ride: ThoughtRide, lap: number) { this.course.setThought?.(ride, lap) }
+
+  setLesson(lesson: Lesson, lap: number) { this.course.setLesson?.(lesson, lap) }
 
   get renderCalls() { return this.renderer.info.render.calls }
 

@@ -10,14 +10,16 @@ function modelReleases() {
   const repositories = ['Qwen', 'google', 'openai', 'deepseek-ai', 'mistralai'].map(async publisher => {
     const params = new URLSearchParams({ author: publisher, sort: 'createdAt', direction: '-1', limit: '4' })
     const data = await getJSON<{ id: string; createdAt: string }[]>('https://huggingface.co/api/models?' + params)
-    return data.flatMap(model => story(model.id, 'Hugging Face', model.createdAt))
+    return data.flatMap(model => story(model.id, 'Hugging Face', model.createdAt,
+      'https://huggingface.co/' + model.id.split('/').map(encodeURIComponent).join('/')))
   })
   return combine([...repositories, hackerNews('AI model', topicDays, title => ai.test(title) && release.test(title))])
 }
 
 async function research() {
-  const data = await getJSON<{ title: string; paper: { publishedAt: string } }[]>('https://huggingface.co/api/daily_papers')
-  return data.flatMap(item => story(item.title, 'Hugging Face Daily Papers', item.paper?.publishedAt))
+  const data = await getJSON<{ title: string; paper: { id: string; publishedAt: string } }[]>('https://huggingface.co/api/daily_papers')
+  return data.flatMap(item => story(item.title, 'Hugging Face Daily Papers', item.paper?.publishedAt,
+    item.paper?.id ? 'https://huggingface.co/papers/' + encodeURIComponent(item.paper.id) : undefined))
 }
 
 export const machineFeed = roadsideNews('machine', 'MACHINE CITY', [

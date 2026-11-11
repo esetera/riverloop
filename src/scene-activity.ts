@@ -1,5 +1,5 @@
 import * as T from 'three'
-import { auroraGround, cityGround, coastEdge, coastGround, echoGround, scenarios, type ScenarioId } from './scenarios.ts'
+import { artGround, auroraGround, cityGround, coastEdge, coastGround, echoGround, gackaGround, ponsonbyGround, thoughtGround, scenarios, type ScenarioId } from './scenarios.ts'
 import { groundHeight, riverCenter, riverEdge, RouteClearance, waterLevel, type LoopRoute } from './route.ts'
 
 // Actors share their small set of shapes and paints within each course.
@@ -32,7 +32,7 @@ function models() {
 }
 
 export function addGradeSigns(scene: T.Scene, route: LoopRoute, scenario: ScenarioId) {
-  const terrain = { valley: groundHeight, coast: coastGround, cyber: cityGround, echo: echoGround, machine: cityGround, airwave: coastGround, folio: cityGround, aurora: auroraGround }[scenario]
+  const terrain = { valley: groundHeight, coast: coastGround, cyber: cityGround, echo: echoGround, machine: cityGround, airwave: coastGround, folio: cityGround, aurora: auroraGround, ideas: auroraGround, gacka: gackaGround, ponsonby: ponsonbyGround, thought: thoughtGround, art: artGround }[scenario]
   const themes = {
     valley: ['#425346', '#f8dfad'],
     coast: ['#25556a', '#ffedc6'],
@@ -42,6 +42,11 @@ export function addGradeSigns(scene: T.Scene, route: LoopRoute, scenario: Scenar
     airwave: ['#47374a', '#ffdfbf'],
     folio: ['#592e35', '#f6dcb6'],
     aurora: ['#153449', '#a9f8f0'],
+    ideas: ['#232641', '#f5c27f'],
+    gacka: ['#375d45', '#fff2d4'],
+    ponsonby: ['#234450', '#f9e0ad'],
+    thought: ['#4e2c47', '#ffe0ba'],
+    art: ['#272a3b', '#ffda9e'],
   }
   const [background, ink] = themes[scenario]
   const boards = new Map<boolean, T.MeshBasicMaterial>()

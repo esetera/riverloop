@@ -26,3 +26,23 @@ Riverloop’s terrain, scenery, animated vehicles and wildlife, bike artwork, so
 - [Deep Dive into LLMs like ChatGPT](https://www.youtube.com/watch?v=7xTGNNLPyMI) by Andrej Karpathy.
 - [Transformers](https://www.youtube.com/watch?v=wjZofJX0v4M) and [Attention in transformers](https://www.youtube.com/watch?v=eMlx5fFNoYc) by 3Blue1Brown.
 - [Latest uploads](https://www.youtube.com/playlist?list=UUKelCK4ZaO6HeEI1KQjqzWA) from The AI Daily Brief.
+
+
+## Place and lesson references
+
+- Gacka Valley is a compressed original recreation of the Sinac area. [Photographs of Majerovo Vrilo](https://commons.wikimedia.org/wiki/Category:Majerovo_vrilo) were used as visual references for the original weathered timber, shingle, and river materials. The [Northern Velebit National Park Gacka Valley guide](https://np-sjeverni-velebit.hr/www/en/visiting/surroundings/gacka-valley) documents the springs and watermills at Majerovo Vrilo.
+- Ponsonby Ridge is a compressed original recreation inspired by [Auckland Council’s Ponsonby Road Plan](https://www.aucklandcouncil.govt.nz/content/dam/ac/docs/plans/place/ponsonby-road-plan.pdf) and its [Western Park Path guide](https://www.aucklandcouncil.govt.nz/en/parks-recreation/get-outdoors/aklpaths/path-detail/340.html). The [Three Lamps then-and-now photographs](https://www.donovanimages.co.nz/media/then-and-now/heritage-images/Ponsonby-Three-Lamps-PO-W00392/Ponsonby-PO-W00392-1924-2021.html) were visual references for the original post office geometry. Shops use original painted façades. Neither ride is a navigation route.
+- Idea Circuit’s diagrams and lesson layout are original. The configured agent writes the lesson and provides source links for its research.
+
+## Art History gallery
+
+The Art Institute of Chicago provides the following public-domain artwork images under its [CC0 Open Access policy](https://www.artic.edu/image-licensing). Riverloop bundles the images locally. The gallery, display layouts, and captions are original to Riverloop.
+
+- Ancient Egyptian, [*Funerary Papyrus of Tayuhenutmut*](https://www.artic.edu/artworks/805), c. 1069–945 BCE.
+- Painter of Tarquinia RC 3984, [*Belly-Amphora (Storage Jar)*](https://www.artic.edu/artworks/52198), 550–540 BCE.
+- Master Honoré, [*Bishop at Mass in a Historiated Initial “P” from a Choirbook*](https://www.artic.edu/artworks/14691), c. 1300.
+- Perugino, [*The Baptism of Christ*](https://www.artic.edu/artworks/16197), 1500–05.
+- Mughal, [*Kichik Beg Wounded during Babur’s Attack on Qalat, from a copy of the Baburnama*](https://www.artic.edu/artworks/140588), c. 1590.
+- Katsushika Hokusai, [*Under the Wave off Kanagawa*](https://www.artic.edu/artworks/24645), 1830–33.
+- Claude Monet, [*Water Lilies*](https://www.artic.edu/artworks/16568), 1906.
+- Vasily Kandinsky, [*Improvisation No. 30 (Cannons)*](https://www.artic.edu/artworks/8991), 1913.

@@ -6,7 +6,7 @@ export const efforts = ['Easy', 'Steady', 'Gentle hill'] as const
 export type Effort = typeof efforts[number]
 export type Phase = 'idle' | 'riding' | 'paused' | 'complete'
 export type Segment = { at: number; effort: Effort }
-export type Summary = { seconds: number; plannedSeconds: number; laps: number; endedAt: string }
+export type Summary = { seconds: number; plannedSeconds: number; laps: number; endedAt: string; scenario?: import('./scenarios.ts').ScenarioId; daily?: boolean }
 export const rideModes = ['scenic', 'steady', 'hills'] as const
 export type RideMode = typeof rideModes[number]
 
