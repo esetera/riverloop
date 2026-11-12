@@ -1,6 +1,6 @@
 import { LoopRoute, smoothstep, startingDistance } from './route.ts'
 
-export const scenarioIds = ['valley', 'coast', 'cyber', 'echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art'] as const
+export const scenarioIds = ['valley', 'coast', 'cyber', 'echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art', 'berkeley', 'umbra'] as const
 export type ScenarioId = typeof scenarioIds[number]
 type Scenario = {
   number: string
@@ -142,6 +142,34 @@ export function artGround(x: number, z: number) {
     + terrace + 21 * Math.min(1.8, edge ** 2)
 }
 
+const berkeley: [number, number][] = [
+  [-88, 101], [-92, 62], [-100, 11], [-97, -45], [-73, -84],
+  [-28, -107], [30, -110], [84, -95], [117, -51], [122, 2],
+  [115, 51], [90, 89], [42, 110], [-18, 121], [-65, 121],
+]
+
+export function berkeleyShore(z: number) {
+  return -114 + 6 * Math.cos(z / 34) + 5 * Math.sin(z / 67)
+}
+
+export function berkeleyGround(x: number, z: number) {
+  const bank = smoothstep(-4, 13, x - berkeleyShore(z))
+  const hill = 8 * Math.exp(-(((x - 81) / 65) ** 2 + ((z + 8) / 94) ** 2))
+  const ridge = 42 * Math.exp(-(((x - 229) / 78) ** 2 + ((z + 45) / 160) ** 2))
+  return -2 + bank * (3.5 + hill + ridge + .65 * Math.sin(x / 26 + z / 27))
+}
+
+const umbra: [number, number][] = [
+  [-60, 125], [-64, 64], [-68, 3], [-65, -66], [-58, -127],
+  [-20, -164], [41, -176], [106, -152], [138, -95], [143, -30],
+  [132, 35], [97, 98], [57, 141], [-5, 152], [-44, 144],
+]
+
+export function umbraGround(x: number, z: number) {
+  const bank = 4.8 * Math.exp(-(((x - 134) / 51) ** 2 + ((z - 49) / 61) ** 2))
+  return .18 + .32 * Math.cos(x / 39 + z / 53) + .28 * Math.sin(z / 36) + bank
+}
+
 export const scenarios: Record<ScenarioId, Scenario> = {
   valley: {
     number: '01', title: ['Willowmere', 'Valley'], start: startingDistance,
@@ -246,6 +274,22 @@ export const scenarios: Record<ScenarioId, Scenario> = {
     discovery: { name: 'Modern Gallery', at: 771 },
     mission: { name: 'Ride through art history', description: 'Look for one detail in each work as you ride toward the Modern Gallery.', arrival: 'You reached the Modern Gallery.' },
     makeRoute: () => new LoopRoute(art, (x, z) => artGround(x, z) + .24),
+  },
+  berkeley: {
+    number: '14', title: ['Berkeley', 'Waterfront'], start: 7,
+    description: 'Ride past Berkeley Marina, kite lawns, and the low hills above the bay. Roadside signs share family events in Berkeley and San Francisco.',
+    landmarks: 'BERKELEY MARINA · CÉSAR CHÁVEZ PARK · BAY VIEWS',
+    discovery: { name: 'César Chávez Park', at: 245 },
+    mission: { name: 'Follow the bay', description: 'Ride from the marina to the kite lawns at César Chávez Park.', arrival: 'You’ve reached the kite lawns at César Chávez Park.' },
+    makeRoute: () => new LoopRoute(berkeley, (x, z) => berkeleyGround(x, z) + .24),
+  },
+  umbra: {
+    number: '15', title: ['Umbra', 'Salt Flats'], start: 7,
+    description: 'Cross a salt lake as the moon slides over the sun. Reach the observatory at totality, then bring the light back as you finish the lap.',
+    landmarks: 'SALT MIRRORS · TOTAL ECLIPSE · SHADOW STATION',
+    discovery: { name: 'Shadow Station', at: 205 },
+    mission: { name: 'Ride into totality', description: 'Follow the causeway to Shadow Station as the sun disappears.', arrival: 'Totality at Shadow Station. Look for the corona above the salt flats.' },
+    makeRoute: () => new LoopRoute(umbra, (x, z) => umbraGround(x, z) + .20),
   },
 }
 

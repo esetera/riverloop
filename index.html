@@ -61,6 +61,8 @@
           <option value="ponsonby">Ponsonby Ridge</option>
           <option value="thought">Thought Circuit</option>
           <option value="art">Art History</option>
+          <option value="berkeley">Berkeley Waterfront</option>
+          <option value="umbra">Umbra Salt Flats</option>
         </select>
       </label>
     </header>
@@ -71,6 +73,7 @@
           <div class="eyebrow"><span class="badge-dot"></span> SCENIC RIDE <span class="eyebrow-rule"></span><span id="intro-route">ROUTE 01</span></div>
           <h1 id="start-title"><span id="scenario-first">Willowmere</span><br><em id="scenario-last">Valley</em></h1>
           <p class="intro" id="scenario-intro">Follow the river through quiet woods, across a timber bridge, and into a village in the late afternoon sun.</p>
+          <button type="button" class="text-button" data-bay-events aria-haspopup="dialog" hidden>Browse family events</button>
           <button type="button" id="tune-airwave" class="text-button" hidden><svg class="icon" aria-hidden="true"><use href="#radio-icon"/></svg> Tune in to Ride Radio</button>
           <form id="concept-form" class="concept-form" hidden>
             <label for="concept">What do you want to learn?</label>
@@ -118,7 +121,7 @@
           </div>
           <div class="cadence-setup">
             <div class="sensor-buttons"><button type="button" id="pair-cadence">Pair cadence sensor</button><button type="button" id="pair-heart">Pair heart-rate monitor</button></div>
-            <p id="cadence-status" role="status">Simulated speed by default. Spin the pedals before pairing.</p>
+            <p id="cadence-status" role="status">Spin the pedals before pairing. Pair to control your speed.</p>
             <p id="heart-status" role="status" hidden></p>
           </div>
           <p id="world-error" class="world-error" role="alert" hidden></p>
@@ -198,7 +201,10 @@
               <svg class="profile-chart" id="ride-profile" role="img"></svg>
               <div class="profile-scale"><span id="ride-profile-scale"></span><span id="ride-profile-length"></span></div>
               <div class="ride-discovery"><svg class="icon" aria-hidden="true"><use href="#pin-icon"/></svg><span id="ride-landmark"></span></div>
-              <p class="ghost-readout" id="ghost-readout" hidden></p>
+              <p class="ghost-readout" id="ghost-readout" hidden>
+                <span id="ghost-pace"></span>
+                <span id="recent-ghost-legend" hidden>Recent laps</span>
+              </p>
             </div>
           </div>
         </div>
@@ -225,6 +231,7 @@
           <button type="button" id="make-easier"><svg class="icon"><use href="#leaf-icon"/></svg><span>Make easier</span><kbd>E</kbd></button>
           <button type="button" id="finish-ride"><svg class="icon"><use href="#flag-icon"/></svg><span>Finish</span><kbd>F</kbd></button>
           <button type="button" id="pin-details" aria-pressed="false">Details</button>
+          <button type="button" data-bay-events aria-haspopup="dialog" aria-label="Browse family events" hidden>Events</button>
         </nav>
         <small class="ride-footnote" id="ride-footnote">WILLOWMERE VALLEY · SIMULATED RIDE</small>
       </section>
@@ -329,6 +336,16 @@
     </main>
   </div>
 
+  <dialog id="bay-events" class="modal bay-events" aria-labelledby="bay-events-title">
+    <div class="modal-body">
+      <div class="modal-heading">
+        <div><p class="eyebrow" id="bay-events-week">NOVEMBER 12–18, 2026 · PACIFIC TIME</p><h2 id="bay-events-title">Family events</h2></div>
+        <form method="dialog"><button type="submit" autofocus>Close</button></form>
+      </div>
+      <p id="bay-events-ended" hidden>The November 12–18 edition has ended. See the calendars for upcoming events.</p>
+      <div id="bay-events-list"></div>
+    </div>
+  </dialog>
   <dialog id="settings" class="modal" aria-labelledby="settings-title">
     <form method="dialog" class="modal-body">
       <div class="modal-heading"><div><span class="eyebrow">RIVERLOOP</span><h2 id="settings-title">Settings</h2></div>
@@ -345,8 +362,8 @@
           <button type="button" id="reset-goal">Reset goal to 60 min</button>
           <button type="button" id="reset-week">Reset this week’s minutes</button>
         </div>
-        <label class="ghost-setting"><input id="ghost-enabled" type="checkbox"> Ride with my last-lap ghost</label>
-        <small>Finish a lap on a route to record its ghost. Simulated and sensor laps are kept separate.</small>
+        <label class="ghost-setting"><input id="ghost-enabled" type="checkbox"> Show my last simulated lap as a ghost</label>
+        <small>Cadence rides always save and show your three latest laps and your best lap on each route.</small>
       </fieldset>
       <fieldset>
         <legend>Heart rate</legend>
@@ -367,7 +384,7 @@
       <fieldset>
         <legend>Sound</legend>
         <div class="sound-options">
-          <label><input id="ambient" type="checkbox"> Ambient sound</label>
+          <label><input id="ambient" type="checkbox"> Ambient and route sounds</label>
           <label><input id="speech" type="checkbox"> Spoken cues</label>
           <label><input id="cycling" type="checkbox"> Cycling sounds</label>
           <label><input id="muted" type="checkbox"> Mute all</label>

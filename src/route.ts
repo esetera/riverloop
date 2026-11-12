@@ -2,6 +2,7 @@ import { CatmullRomCurve3, Vector3 } from 'three'
 
 export const waterLevel = -0.45
 export const roadHalfWidth = 2.75
+export const riderLaneOffset = .57
 
 export function riverCenter(z: number) {
   return 36 + 11 * Math.sin((z + 34) / 62) + 7 * Math.sin((z - 80) / 134)

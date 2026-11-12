@@ -6,16 +6,20 @@ import { addBeachLife, addSkyTraffic } from './scene-activity.ts'
 import { addAndroids } from './machine-world.ts'
 import { makeBillboard } from './roadside-billboards.ts'
 import { machineFeed } from './machine-feed.ts'
+import { makeRoadContact } from './road-contact.ts'
 
 export type CourseScene = {
   scene: T.Scene
   detail: T.Group
   sunlight: T.DirectionalLight
-  animate: (time: number, eye: T.Vector3) => void
+  animate: (time: number, eye: T.Vector3, distance: number) => void
   mission: (progress?: number) => void
   shadows: boolean
   startRide?: () => void
   signAhead?: (distance: number) => boolean
+  roadContact?: ReturnType<typeof makeRoadContact>
+  gulls?: readonly T.Object3D[]
+  surf?: (time: number, eye: T.Vector3, source: T.Vector3) => number
   setThought?: (ride: import('./thinking.ts').ThoughtRide, lap: number) => void
   setLesson?: (lesson: import('./lessons.ts').Lesson, lap: number) => void
 }
@@ -355,12 +359,30 @@ export function makeCoastScene(route: LoopRoute, airwave = false): CourseScene {
   shoreTerrain(scene)
   const water = ocean(scene, horizon)
   pavedRoad(scene, route, false)
+  const start = scenarios[airwave ? 'airwave' : 'coast'].start
+  const strips = [27, 154].flatMap(offset => Array.from({ length: 6 }, (_, i) => ({
+    at: start + offset + i * 1.12, height: .039,
+  })))
+  batch(scene, strips.map(({ at }) => {
+    const { point, tangent } = route.frameAt(at)
+    return { x: point.x, y: point.y + .021, z: point.z, width: 5.8, height: .03, depth: .19,
+      angle: Math.atan2(tangent.x, tangent.z), color: '#d8c9a7' }
+  }))
   addCoastDetails(scene, detail, route)
   const animateStation = airwave ? addAirwaveStation(scene, route) : undefined
   if (!airwave) addLighthouse(scene)
-  const animateBeach = addBeachLife(scene, route)
+  const beach = addBeachLife(scene, route)
   const course: CourseScene = {
-    scene, detail, sunlight, shadows: false,
+    scene, detail, sunlight, shadows: false, gulls: beach.gulls,
+    roadContact: makeRoadContact(route.length, strips, 'rumble'),
+    surf(time, eye, source) {
+      const z = eye.z
+      // Sample the same moving wave used by the foam shader, at the breaker line.
+      const breaker = 15
+      source.set(coastEdge(z) + breaker, -.60, z)
+      const wave = .5 + .5 * Math.sin(breaker * 1.3 + Math.sin(z * .36) * .38 - time * 1.5)
+      return .26 + .74 * smoothstep(.1, .94, wave)
+    },
     mission(progress) {
       const glow = progress === undefined ? (airwave ? .92 : 0) : .73 + .27 * progress
       horizon.copy(dayHorizon).lerp(sunsetHorizon, glow)
@@ -374,7 +396,7 @@ export function makeCoastScene(route: LoopRoute, airwave = false): CourseScene {
     animate(time, eye) {
       sky.sky.position.copy(eye)
       sky.time.value = water.value = time
-      animateBeach(time)
+      beach.animate(time)
       animateStation?.(time)
     },
   }

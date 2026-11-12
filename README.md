@@ -27,7 +27,7 @@ Choose **Scenic** for an easy spin, **Steady** for a cadence target you set, or 
 
 The ride summary marks a new longest ride and a return after at least seven calendar days for rides of a minute or more. With a cadence sensor, Riverloop also compares the steadiness of your cadence on the same climb.
 
-Enable **Ride with my last-lap ghost** in the same settings. Once you’ve completed a lap, your next ride on that route can replay your latest lap as a translucent cyclist and show your pace compared with it. Cadence and simulated rides save separate ghosts.
+Cadence rides automatically save your last three completed laps and your fastest saved lap on each route. They replay when you start a lap, with recent laps in mint and the fastest in gold. If the fastest lap is also recent, it appears once in gold. For simulated rides, enable **Show my last simulated lap as a ghost** to replay the previous ride’s last lap on that route.
 
 The elevation profile shows one lap, your position, and the current gradient. During the main ride, the effort cues follow the terrain. At five seconds, a banner and an optional spoken cue signal the upcoming change. **Make easier** switches to Easy for the rest of the current ride. The finish screen records elapsed riding time and full laps.
 

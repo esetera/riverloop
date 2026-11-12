@@ -1,12 +1,12 @@
 import * as T from 'three'
-import { auroraGround, echoGround, cityGround, coastGround, gackaGround, ponsonbyGround, thoughtGround, scenarios } from './scenarios.ts'
+import { auroraGround, berkeleyGround, echoGround, cityGround, coastGround, gackaGround, ponsonbyGround, thoughtGround, scenarios } from './scenarios.ts'
 import { quoteEdition } from './echo-quotes.ts'
 import { type LoopRoute } from './route.ts'
 import { sourceURL, type RoadSource } from './road-links.ts'
 
 type Theme = { background: string; ink: string; accent: string; frame: string; font: string }
 type Panel = { label: string; title: string; footer: string; accent?: string; url?: string; linkTitle?: string; explain?: () => void }
-type Kind = 'echo' | 'machine' | 'folio' | 'airwave' | 'idea' | 'wall' | 'gacka' | 'ponsonby' | 'thought'
+type Kind = 'echo' | 'machine' | 'folio' | 'airwave' | 'idea' | 'wall' | 'gacka' | 'ponsonby' | 'thought' | 'berkeley'
 export type RoadPanel = { corners: T.Vector3[]; normal: T.Vector3; source?: RoadSource; explain?: () => void; prompt?: string }
 const panelsByScene = new WeakMap<T.Scene, RoadPanel[]>()
 export const roadPanels = (scene: T.Scene) => panelsByScene.get(scene) ?? []
@@ -28,6 +28,9 @@ const print: Theme = {
 }
 const glass: Theme = {
   background: '#171b36', ink: '#fff8e7', accent: '#f5c27f', frame: '#655875', font: 'system-ui, sans-serif',
+}
+const bay: Theme = {
+  background: '#163d45', ink: '#fff5d9', accent: '#f8c479', frame: '#426b6c', font: 'Georgia, serif',
 }
 const quoteSlots = [[35, 1], [108, -1], [180, 1], [315, -1], [390, 1], [510, -1]] as const
 
@@ -59,13 +62,13 @@ export function makeBillboard(scene: T.Scene, route: LoopRoute, distance: number
   const isCity = kind !== 'echo'
   const lesson = kind === 'idea' || kind === 'wall'
   const thought = kind === 'thought'
-  const theme = thought ? { background: '#f1d2ba', ink: '#352c49', accent: '#863f5e', frame: '#624556', font: 'Georgia, serif' } : lesson ? glass : kind === 'folio' || kind === 'ponsonby' ? print : kind === 'gacka' || !isCity ? woodland : terminal
+  const theme = kind === 'berkeley' ? bay : thought ? { background: '#f1d2ba', ink: '#352c49', accent: '#863f5e', frame: '#624556', font: 'Georgia, serif' } : lesson ? glass : kind === 'folio' || kind === 'ponsonby' ? print : kind === 'gacka' || !isCity ? woodland : terminal
   const terrain = thought ? thoughtGround : lesson ? auroraGround : kind === 'gacka' ? gackaGround : kind === 'ponsonby' ? ponsonbyGround :
-    kind === 'airwave' ? coastGround : isCity ? cityGround : echoGround
-  const width = kind === 'wall' || thought ? 13.7 : lesson ? 11.6 : kind === 'ponsonby' ? 7.6 : kind === 'gacka' ? 8.8 : isCity ? 10.8 : 8.2
+    kind === 'airwave' ? coastGround : kind === 'berkeley' ? berkeleyGround : isCity ? cityGround : echoGround
+  const width = kind === 'wall' || thought ? 13.7 : lesson ? 11.6 : kind === 'ponsonby' ? 7.6 : kind === 'gacka' || kind === 'berkeley' ? 8.8 : isCity ? 10.8 : 8.2
   const height = width * (kind === 'wall' ? .36 : 5 / 12)
   const { point, right } = route.frameAt(distance)
-  const place = point.clone().addScaledVector(right, side * (kind === 'ponsonby' ? 7.7 : isCity ? 9.5 : 7.7))
+  const place = point.clone().addScaledVector(right, side * (isCity && kind !== 'ponsonby' && kind !== 'berkeley' ? 9.5 : 7.7))
   const incoming = route.pointAt(distance - 22).sub(place)
   const frame = new T.Group()
   frame.position.copy(place)

@@ -1,4 +1,8 @@
 import { electronicStyles, type ElectronicStyle, type Preferences } from './storage.ts'
+import type { RoadMaterial } from './road-contact.ts'
+
+type SpatialSound = { pan: number; level: number }
+export type RideSoundFrame = { gull?: SpatialSound; surf?: SpatialSound; surface?: RoadMaterial }
 
 type Track = {
   interval: number
@@ -105,11 +109,46 @@ const tracks: Record<Exclude<ElectronicStyle, 'fogbloom'>, Track> = {
   },
 }
 
+function gullCall(context: AudioContext) {
+  const rate = context.sampleRate
+  const buffer = context.createBuffer(1, Math.ceil(rate * .72), rate)
+  const samples = buffer.getChannelData(0)
+  let phase = 0
+  let throat = 0
+  for (let i = 0; i < samples.length; i++) {
+    const t = i / rate
+    const second = t >= .29
+    const progress = (t - (second ? .29 : 0)) / (second ? .41 : .245)
+    if (progress >= 1) continue
+    const arch = Math.sin(progress * Math.PI)
+    const pitch = (second ? 690 : 820) + 660 * arch - 160 * progress + 45 * Math.sin(t * 97)
+    phase += 2 * Math.PI * pitch / rate
+    throat = throat * .64 + (Math.random() * 2 - 1) * .36
+    const voice = Math.sin(phase) * .59 + Math.sin(2 * phase) * .28 + Math.sin(3 * phase) * .12
+    const flutter = .76 + .24 * Math.sin(t * 195)
+    samples[i] = arch ** .72 * (voice * flutter + .25 * throat)
+  }
+  return buffer
+}
+
+const contacts: Record<RoadMaterial, { band: number; level: number; duration: number; body: number }> = {
+  stone: { band: 1150, level: .21, duration: .104, body: 146 },
+  timber: { band: 390, level: .13, duration: .085, body: 174 },
+  rumble: { band: 670, level: .14, duration: .080, body: 112 },
+}
+
 export class RideAudio {
   private context?: AudioContext
   private wind?: GainNode
   private music?: GainNode
   private cycling?: GainNode
+  private scenery?: GainNode
+  private surf?: GainNode
+  private surfPan?: StereoPannerNode
+  private gull?: AudioBuffer
+  private nextGull = 0
+  private nextContact = 0
+  private nextSurfUpdate = 0
   private drumNoise?: AudioBuffer
   private musicTimer?: number
   private chord = 0
@@ -147,6 +186,7 @@ export class RideAudio {
   newRide() {
     this.randomStyle = electronicStyles[Math.floor(Math.random() * electronicStyles.length)]
     this.chord = 0
+    this.nextGull = this.nextContact = this.nextSurfUpdate = 0
   }
 
   private setup() {
@@ -197,6 +237,73 @@ export class RideAudio {
     this.music = context.createGain()
     this.music.gain.value = 0
     this.music.connect(context.destination)
+
+    this.scenery = context.createGain()
+    this.scenery.gain.value = 0
+    this.scenery.connect(context.destination)
+    this.surf = context.createGain()
+    this.surf.gain.value = 0
+    this.surfPan = context.createStereoPanner()
+    const breakers = context.createBiquadFilter()
+    breakers.type = 'bandpass'
+    breakers.frequency.value = 410
+    breakers.Q.value = .48
+    noise.connect(breakers).connect(this.surf).connect(this.surfPan).connect(this.scenery)
+    this.gull = gullCall(context)
+  }
+
+  get sceneAudible() {
+    return this.active && this.preferences?.ambient === true && !this.preferences.muted && this.context?.state === 'running'
+  }
+
+  updateScene({ gull, surf, surface }: RideSoundFrame) {
+    const context = this.context
+    const bus = this.scenery
+    if (!context || !bus || !this.sceneAudible) return
+    const now = context.currentTime
+    if (now >= this.nextSurfUpdate) {
+      this.nextSurfUpdate = now + .045
+      this.surf?.gain.setTargetAtTime((surf?.level ?? 0) * .43, now, .13)
+      this.surfPan?.pan.setTargetAtTime(surf?.pan ?? 0, now, .12)
+    }
+    if (gull && gull.level > .10 && this.gull && now >= this.nextGull) {
+      this.nextGull = now + 5.6 + Math.random() * 4.2
+      const call = context.createBufferSource()
+      call.buffer = this.gull
+      call.playbackRate.value = .88 + Math.random() * .24
+      const gain = context.createGain()
+      gain.gain.value = .21 * gull.level
+      const pan = context.createStereoPanner()
+      pan.pan.value = gull.pan
+      call.connect(gain).connect(pan).connect(bus)
+      call.start()
+    }
+    if (surface && this.drumNoise && now >= this.nextContact) {
+      this.nextContact = now + .052
+      const { band, level, duration, body } = contacts[surface]
+      const envelope = context.createGain()
+      envelope.gain.setValueAtTime(.0001, now)
+      envelope.gain.exponentialRampToValueAtTime(level, now + .007)
+      envelope.gain.exponentialRampToValueAtTime(.0001, now + duration)
+      envelope.connect(bus)
+      const grit = context.createBufferSource()
+      grit.buffer = this.drumNoise
+      const filter = context.createBiquadFilter()
+      filter.type = 'bandpass'
+      filter.frequency.value = band
+      filter.Q.value = .85
+      grit.connect(filter).connect(envelope)
+      grit.start(now, Math.random() * .025, duration)
+      const thud = context.createOscillator()
+      thud.type = 'triangle'
+      thud.frequency.setValueAtTime(body, now)
+      thud.frequency.exponentialRampToValueAtTime(body * .53, now + duration * .60)
+      const bodyGain = context.createGain()
+      bodyGain.gain.value = .34
+      thud.connect(bodyGain).connect(envelope)
+      thud.start(now)
+      thud.stop(now + duration)
+    }
   }
 
   sync(active: boolean, preferences: Preferences) {
@@ -209,6 +316,9 @@ export class RideAudio {
       context.currentTime, .18)
     this.cycling?.gain.setTargetAtTime(active && !preferences.muted && preferences.cycling ? .47 : 0,
       context.currentTime, .12)
+    const soundscape = active && !preferences.muted && preferences.ambient
+    this.scenery?.gain.setTargetAtTime(soundscape ? 1 : 0, context.currentTime, .035)
+    if (!soundscape) this.surf?.gain.setTargetAtTime(0, context.currentTime, .04)
     const requestedStyle = preferences.musicStyle === 'random' ? this.randomStyle : preferences.musicStyle
     const playMusic = active && !preferences.muted && preferences.music && preferences.musicVolume > 0 && context.state === 'running'
     const style = playMusic ? requestedStyle : undefined

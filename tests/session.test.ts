@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { SimulatedRideInput, simulationSpeed } from '../src/input.ts'
-import { calendarDay } from '../src/progress.ts'
+import { cadenceReplay, calendarDay, lapSplits, recordCadenceLap } from '../src/progress.ts'
 import { LoopRoute, riverEdge, startingDistance } from '../src/route.ts'
 import { scenarios } from '../src/scenarios.ts'
 import { RideSession, clockText, makeSchedule } from '../src/session.ts'
@@ -151,6 +151,20 @@ test('storage recovers from bad saves and preserves completed sessions', () => {
     progress.discovered.push('coast')
     writeSave(preferences, [ride], progress)
     assert.deepEqual(loadSave(), { version: 1, preferences, rides: [ride], progress })
+
+    const trace = (seconds: number) => Array.from({ length: lapSplits + 1 }, (_, i) => seconds * i / lapSplits)
+    const best = trace(60)
+    const simulated = trace(140)
+    value = JSON.stringify({ version: 1, progress: { ghosts: { 'valley:cadence': best, 'valley:simulated': simulated } } })
+    const migrated = loadSave().progress
+    assert.deepEqual(migrated.ghosts, { 'valley:simulated': simulated })
+    assert.deepEqual(cadenceReplay(migrated.cadenceGhosts?.valley), [best])
+    const recent = [trace(91), trace(85), trace(90)]
+    let history = recordCadenceLap(migrated.cadenceGhosts?.valley, trace(95))
+    for (const lap of recent) history = recordCadenceLap(history, lap)
+    migrated.cadenceGhosts = { valley: history }
+    writeSave(preferences, [], migrated)
+    assert.deepEqual(cadenceReplay(loadSave().progress.cadenceGhosts?.valley), [best, ...recent.reverse()])
   } finally {
     if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor)
     else Reflect.deleteProperty(globalThis, 'localStorage')

@@ -1,9 +1,12 @@
 import * as T from 'three'
+import { recentCadenceLaps } from './progress.ts'
 
-export function makeGhostCyclist(scene: T.Scene) {
+export const ghostRiderColors = ['#ffd286', ...Array<string>(recentCadenceLaps).fill('#a0f9e4')]
+
+export function makeGhostCyclist(scene: T.Scene, color: string) {
   const rider = new T.Group()
-  const outline = new T.MeshBasicMaterial({ color: '#a0f9e4', transparent: true, opacity: .77, depthWrite: false })
-  const jersey = new T.MeshBasicMaterial({ color: '#53d5c9', transparent: true, opacity: .56, depthWrite: false })
+  const outline = new T.MeshBasicMaterial({ color, transparent: true, opacity: .85, depthWrite: false })
+  const jersey = new T.MeshBasicMaterial({ color, transparent: true, opacity: .65, depthWrite: false })
   const wheelGeometry = new T.TorusGeometry(.335, .025, 7, 24).rotateY(Math.PI / 2)
   const tube = new T.CylinderGeometry(1, 1, 1, 7)
   const sphere = new T.SphereGeometry(1, 12, 8)

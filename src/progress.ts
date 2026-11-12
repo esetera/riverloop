@@ -4,13 +4,16 @@ import type { LoopRoute } from './route.ts'
 
 export const dailyMinutes = 10
 export const lapSplits = 60
+export const recentCadenceLaps = 3
 export type GhostKey = `${ScenarioId}:${'cadence' | 'simulated'}`
+export type CadenceGhostHistory = { recent: number[][]; best: number[] }
 export type RideProgress = {
   days: Record<number, number>
   lastDaily?: number
   weekResetAt?: number
   discovered: ScenarioId[]
   ghosts: Partial<Record<GhostKey, number[]>>
+  cadenceGhosts?: Partial<Record<ScenarioId, CadenceGhostHistory>>
   missions?: ScenarioId[]
   longest?: number
   bestClimbs?: Partial<Record<ScenarioId, number>>
@@ -46,6 +49,21 @@ export function ghostKey(scenario: ScenarioId, cadence: boolean): GhostKey {
 export function validTrace(value: unknown): value is number[] {
   return Array.isArray(value) && value.length === lapSplits + 1 && value[0] === 0 &&
     value.every((time, i) => typeof time === 'number' && Number.isFinite(time) && (i === 0 || time > value[i - 1]))
+}
+
+export function recordCadenceLap(history: CadenceGhostHistory | undefined, trace: number[]): CadenceGhostHistory {
+  const best = history?.best
+  return {
+    recent: [trace, ...(history?.recent ?? [])].slice(0, recentCadenceLaps),
+    best: !best || trace[lapSplits] < best[lapSplits] ? trace : best,
+  }
+}
+
+export function cadenceReplay(history: CadenceGhostHistory | undefined) {
+  if (!history) return []
+  const { best, recent } = history
+  // A recent lap that is also the best needs only one rider.
+  return [best, ...recent.filter(trace => !trace.every((time, i) => time === best[i]))]
 }
 
 export class LapRecorder {

@@ -7,19 +7,24 @@ import { addGradeSigns, addValleyLife } from './scene-activity.ts'
 import { makeEchoScene } from './echo-world.ts'
 import { makeFolioScene } from './folio-world.ts'
 import { makeAuroraScene } from './aurora-world.ts'
-import { LoopRoute, RouteClearance, smoothstep } from './route.ts'
-import { makeGhostCyclist } from './ghost.ts'
+import { LoopRoute, RouteClearance, riderLaneOffset, smoothstep } from './route.ts'
+import { ghostRiderColors, makeGhostCyclist } from './ghost.ts'
 import type { ScenarioId } from './scenarios.ts'
 import { roadPanels } from './roadside-billboards.ts'
 import type { Lesson } from './lessons.ts'
 import type { RoadSource } from './road-links.ts'
 import { makeThoughtScene } from './thought-world.ts'
 import { makeArtScene } from './art-world.ts'
+import { makeUmbraScene } from './umbra-world.ts'
 import type { ThoughtRide } from './thinking.ts'
-import { makeGackaScene, makePonsonbyScene } from './place-worlds.ts'
+import { makeBerkeleyScene, makeGackaScene, makePonsonbyScene } from './place-worlds.ts'
+import { makeRoadContact } from './road-contact.ts'
+import type { RideSoundFrame } from './audio.ts'
 import type { Quality } from './storage.ts'
 
 const pixelRatios: Record<Quality, number> = { light: .78, balanced: 1.25, high: 2 }
+const ghostLanes = [-1.85, -1.05, 1.65, -.25]
+const ponsonbyGhostLanes = [.65, 1.45, -.15, 2.25]
 
 function addBirds(scene: T.Scene) {
   const flock = new T.Group()
@@ -67,11 +72,12 @@ function makeValleyScene(route: LoopRoute): CourseScene {
   addRoad(scene, route)
   const detail = addVegetation(scene, route, new RouteClearance(route))
   const windmill = addVillage(scene)
-  addRoadside(scene, route)
+  const bridge = addRoadside(scene, route)
   const birds = addBirds(scene)
   const animateValley = addValleyLife(scene, route)
   return {
     scene, detail, sunlight, shadows: true,
+    roadContact: makeRoadContact(route.length, bridge.map(at => ({ at, height: .023 })), 'timber'),
     mission(progress) {
       const mist = progress === undefined ? 0 : .92 - .74 * smoothstep(.15, 1, progress)
       horizon.copy(haze).lerp(morning, mist)
@@ -100,7 +106,7 @@ const scenery: Record<ScenarioId, (route: LoopRoute) => CourseScene> = {
   echo: makeEchoScene, machine: route => makeCyberScene(route, true),
   airwave: route => makeCoastScene(route, true), folio: makeFolioScene, aurora: makeAuroraScene,
   ideas: route => makeAuroraScene(route, true), gacka: makeGackaScene, ponsonby: makePonsonbyScene,
-  thought: makeThoughtScene, art: makeArtScene,
+  thought: makeThoughtScene, art: makeArtScene, berkeley: makeBerkeleyScene, umbra: makeUmbraScene,
 }
 function makeCourse(route: LoopRoute, scenario: ScenarioId) {
   const course = scenery[scenario](route)
@@ -136,10 +142,15 @@ export class RideWorld {
   private readonly links = document.querySelector<HTMLElement>('#road-links')!
   private readonly forward = new T.Vector3()
   private readonly offset = new T.Vector3()
+  private readonly soundPosition = new T.Vector3()
+  private readonly soundProjection = new T.Vector3()
+  private readonly listenerRight = new T.Vector3()
+  private previousSoundDistance?: number
   private readonly projected = Array.from({ length: 4 }, () => new T.Vector3())
+  private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
   private linkElements: HTMLAnchorElement[] = []
   private course: CourseScene
-  private ghost: T.Group
+  private ghosts: T.Group[]
   private previewMix = 1
   private sceneryTime = 0
   private quality: Quality = 'balanced'
@@ -152,7 +163,7 @@ export class RideWorld {
     this.renderer.shadowMap.type = T.PCFShadowMap
     this.renderer.shadowMap.autoUpdate = false
     this.course = makeCourse(route, scenario)
-    this.ghost = makeGhostCyclist(this.course.scene)
+    this.ghosts = ghostRiderColors.map(color => makeGhostCyclist(this.course.scene, color))
     this.applyQuality()
     new ResizeObserver(() => this.resize()).observe(canvas)
     this.resize()
@@ -164,11 +175,12 @@ export class RideWorld {
     this.course = next
     this.links.replaceChildren()
     this.linkElements = []
-    this.ghost = makeGhostCyclist(next.scene)
+    this.ghosts = ghostRiderColors.map(color => makeGhostCyclist(next.scene, color))
     this.route = route
     this.scenario = scenario
     this.previewMix = 1
     this.sceneryTime = 0
+    this.previousSoundDistance = undefined
     this.missionProgress = undefined
     this.applyQuality()
   }
@@ -204,11 +216,11 @@ export class RideWorld {
     this.renderer.setSize(width, height, false)
   }
 
-  draw(distance: number, dt: number, preview: boolean, animate: boolean, ghostDistance?: number, linkable = false) {
+  draw(distance: number, dt: number, preview: boolean, animate: boolean, ghostDistances: (number | undefined)[] = [], linkable = false, listen = false) {
     if (animate) this.sceneryTime += Math.min(dt, .075)
     if (animate) this.previewMix = T.MathUtils.damp(this.previewMix, preview ? 1 : 0, 4.0, Math.min(dt, .08))
     const frame = this.route.frameAt(distance)
-    const lane = this.scenario === 'ponsonby' ? -1.13 : .57
+    const lane = this.scenario === 'ponsonby' ? -1.13 : riderLaneOffset
     const eye = this.camera.position.copy(frame.point)
       .addScaledVector(frame.right, T.MathUtils.lerp(lane, -2.0, this.previewMix))
     eye.y += T.MathUtils.lerp(1.79, 4.05, this.previewMix)
@@ -216,17 +228,57 @@ export class RideWorld {
     future.addScaledVector(frame.right, T.MathUtils.lerp(lane * .56, -5.8, this.previewMix))
     future.y = eye.y + (future.y - frame.point.y) * T.MathUtils.lerp(.84, .46, this.previewMix)
       - T.MathUtils.lerp(.42, 1.12, this.previewMix)
-    this.camera.lookAt(future)
-    const gap = ghostDistance === undefined ? Infinity : ghostDistance - distance
-    this.ghost.visible = !preview && gap >= -1.2 && gap <= 115
-    if (this.ghost.visible) {
-      const ghostFrame = this.route.frameAt(distance + Math.max(5.4, gap))
-      this.ghost.position.copy(ghostFrame.point).addScaledVector(ghostFrame.right, -1.05)
-      this.ghost.rotation.y = Math.atan2(ghostFrame.tangent.x, ghostFrame.tangent.z)
+    if (!preview && !this.reducedMotion.matches && this.course.roadContact) {
+      const bump = this.course.roadContact.lift(distance) * (1 - this.previewMix)
+      eye.y += bump
+      future.y += bump * 1.65
     }
-    this.course.animate(this.sceneryTime, eye)
+    this.camera.lookAt(future)
+    const lanes = this.scenario === 'ponsonby' ? ponsonbyGhostLanes : ghostLanes
+    this.ghosts.forEach((ghost, index) => {
+      const ghostDistance = ghostDistances[index]
+      const gap = ghostDistance === undefined ? Infinity : ghostDistance - distance
+      ghost.visible = !preview && gap >= -1.2 && gap <= 115
+      if (!ghost.visible) return
+      // Keep a rider at matching pace in view of the first-person camera.
+      const ghostFrame = this.route.frameAt(distance + Math.max(5.4, gap))
+      ghost.position.copy(ghostFrame.point).addScaledVector(ghostFrame.right, lanes[index])
+      ghost.rotation.y = Math.atan2(ghostFrame.tangent.x, ghostFrame.tangent.z)
+    })
+    this.course.animate(this.sceneryTime, eye, distance)
     this.renderer.render(this.course.scene, this.camera)
     this.drawLinks(linkable)
+    const previous = this.previousSoundDistance
+    this.previousSoundDistance = listen ? distance : undefined
+    if (listen) return this.sceneSounds(distance, previous)
+  }
+
+  private sceneSounds(distance: number, previous?: number): RideSoundFrame {
+    const { gulls, surf, roadContact } = this.course
+    const surface = previous !== undefined && roadContact?.crossed(previous, distance) ? roadContact.material : undefined
+    if (!gulls && !surf) return { surface }
+
+    const eye = this.camera.position
+    this.listenerRight.setFromMatrixColumn(this.camera.matrixWorld, 0)
+    const panAt = (position: T.Vector3) => {
+      this.offset.subVectors(position, eye)
+      const horizontal = Math.hypot(this.offset.x, this.offset.z)
+      return horizontal ? T.MathUtils.clamp(this.offset.dot(this.listenerRight) / horizontal, -.95, .95) : 0
+    }
+    let gull: RideSoundFrame['gull']
+    let nearest = 68
+    for (const bird of gulls ?? []) {
+      const range = eye.distanceTo(bird.position)
+      if (range >= nearest) continue
+      const projected = this.soundProjection.copy(bird.position).project(this.camera)
+      if (projected.z < -1 || projected.z > 1 || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1) continue
+      gull = { pan: panAt(bird.position), level: 1 - smoothstep(10, 68, range) }
+      nearest = range
+    }
+    if (!surf) return { surface, gull }
+    const wave = surf(this.sceneryTime, eye, this.soundPosition)
+    const level = wave * (1 - smoothstep(12, 126, eye.distanceTo(this.soundPosition)))
+    return { surface, gull, surf: { pan: panAt(this.soundPosition), level } }
   }
 
   private drawLinks(enabled: boolean) {
