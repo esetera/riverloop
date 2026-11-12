@@ -442,10 +442,12 @@ function addSign(scene: T.Scene, route: LoopRoute, distance: number, title: stri
 export function addRoadside(scene: T.Scene, route: LoopRoute) {
   const rng = random(380)
   const batch = new Shapes()
+  const bridgeSeams: number[] = []
   for (let d = 0; d < route.length; d += .95) {
     const { point, right, tangent } = route.frameAt(d)
     const edge = riverEdge(point.x, point.z)
     if (edge > 4) continue
+    bridgeSeams.push((d - .475 + route.length) % route.length)
     const yaw = Math.atan2(-tangent.x, -tangent.z)
     batch.add(box, point.x, point.y + .024, point.z, roadHalfWidth * 2.21, .05, .924,
       d % 4 < 2 ? '#957556' : '#89694e', yaw)
@@ -510,6 +512,7 @@ export function addRoadside(scene: T.Scene, route: LoopRoute) {
   batch.addTo(scene, true)
   addSign(scene, route, 156, 'WILLOWMERE', 'RIVER LOOP')
   addSign(scene, route, 613, 'ALDER WOOD', 'WILLOWMERE TRAIL')
+  return bridgeSeams
 }
 
 export function addRidges(scene: T.Scene) {

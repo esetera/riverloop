@@ -1,8 +1,11 @@
 import * as T from 'three'
 import { batch, pavedRoad, type CourseScene } from './alternate-worlds.ts'
 import { addSky, colorMap, random } from './landscape.ts'
-import { RouteClearance, type LoopRoute } from './route.ts'
-import { gackaGround, gackaRiver, gackaWater, ponsonbyGround, scenarios } from './scenarios.ts'
+import { riderLaneOffset, RouteClearance, type LoopRoute } from './route.ts'
+import { makeRoadContact } from './road-contact.ts'
+import { berkeleyGround, berkeleyShore, gackaGround, gackaRiver, gackaWater, ponsonbyGround, scenarios } from './scenarios.ts'
+import { bayEventCalendars, eventDay, eventHours, upcomingBayEvents } from './bay-events.ts'
+import { makeBillboard } from './roadside-billboards.ts'
 
 type Ground = (x: number, z: number) => number
 type Piece = Parameters<typeof batch>[1][number]
@@ -145,6 +148,217 @@ function painter() {
     mesh.scale.set(w, h, d)
     parent.add(mesh)
     return mesh
+  }
+}
+
+function addBerkeleyBay(scene: T.Scene) {
+  const water = new T.Mesh(new T.PlaneGeometry(1400, 1600).rotateX(-Math.PI / 2),
+    new T.MeshBasicMaterial({ color: '#6c9fa7' }))
+  water.position.set(-515, -.36, 0)
+  scene.add(water)
+
+  const rng = random(94710)
+  const ripples: Piece[] = []
+  for (let i = 0; i < 940; i++) {
+    const z = 370 - rng() * 770
+    const x = berkeleyShore(z) - 4 - rng() ** 1.7 * 320
+    ripples.push({ x, y: -.345, z, width: 1 + rng() * 11, height: .02, depth: .06 + rng() * .14,
+      angle: .16, color: ['#77a8ad', '#7faeb3', '#6297a0'][i % 3] })
+  }
+  batch(scene, ripples, undefined, true)
+
+  const piece = painter()
+  const pier = new T.Group()
+  pier.position.set(-136, -.25, 75)
+  piece(pier, '#947e64', 1, .77, 0, 44, .25, 2.2)
+  piece(pier, '#947e64', -16, .77, -22, 2.3, .25, 44)
+  for (let z = -42; z <= 0; z += 5.25) {
+    for (const x of [-17.3, -14.7]) piece(pier, '#68594b', x, .57, z, .20, 2.1, .20)
+  }
+  for (let x = -17; x <= 22; x += 5.25) piece(pier, '#68594b', x, .57, 1, .20, 2.1, .20)
+  instanceBuildings(pier, scene)
+
+  const sailGeometry = new T.BufferGeometry()
+  sailGeometry.setAttribute('position', new T.Float32BufferAttribute([0, 0, 0, 0, 1, 0, .62, 0, 0], 3))
+  sailGeometry.computeVertexNormals()
+  const hullGeometry = new T.SphereGeometry(.5, 12, 8)
+  for (let i = 0; i < 12; i++) {
+    const boat = new T.Group()
+    const x = i < 8 ? -156 + (i % 2) * 7.5 : -168 - rng() * 77
+    const z = i < 8 ? 31 + Math.floor(i / 2) * 10.1 : 16 - rng() * 135
+    boat.position.set(x, -.37, z)
+    boat.rotation.y = .15 + i * .68
+    const hull = piece(boat, ['#f6eee1', '#ca7259', '#f4eddf'][i % 3], 0, .13, 0, 2.0, .55, 5.7, hullGeometry)
+    hull.rotation.y = Math.PI / 2
+    piece(boat, '#625d59', 0, 2.72, 0, .07, 5.2, .07)
+    if (i >= 8) {
+      const sail = new T.Mesh(sailGeometry, new T.MeshLambertMaterial({
+        color: i % 2 ? '#f2e1a8' : '#fff3de', side: T.DoubleSide,
+      }))
+      sail.position.set(.08, .63, 0)
+      sail.scale.set(4.6, 4.5, 1)
+      boat.add(sail)
+    }
+    scene.add(boat)
+  }
+
+  const skyline: Piece[] = Array.from({ length: 29 }, (_, i) => {
+    const height = 5 + rng() * 19
+    return { x: -290 + i * 3.5, y: height / 2 - .4, z: -303 + rng() * 19,
+      width: 3 + rng() * 6, height, depth: 6 + rng() * 8, color: i % 2 ? '#758e94' : '#667f88' }
+  })
+  batch(scene, skyline)
+  const tower = new T.ConeGeometry(1, 1, 4).rotateY(Math.PI / 4)
+  piece(scene, '#788c91', -235, 17, -302, 6, 36, 6, tower)
+  const bridge = new T.Group()
+  bridge.position.set(-323, -.35, -264)
+  bridge.rotation.y = .16
+  const steel = '#687e84'
+  piece(bridge, steel, 0, 7.8, 0, 108, 1.3, 3.6)
+  for (const x of [-31, 30]) {
+    for (const z of [-1.7, 1.7]) piece(bridge, steel, x, 11, z, 1.4, 23, 1.1)
+    for (const y of [10.4, 16.2, 21.7]) piece(bridge, steel, x, y, 0, 1.2, .73, 4.1)
+  }
+  const cableHeight = (x: number) => 10.4 + 12 * ((x + .5) / 30.5) ** 2
+  for (const z of [-1.65, 1.65]) {
+    const cable = new T.CatmullRomCurve3([-54, -31, -.5, 30, 54].map(x =>
+      new T.Vector3(x, Math.abs(x) > 40 ? 8.4 : cableHeight(x), z)))
+    bridge.add(new T.Mesh(new T.TubeGeometry(cable, 50, .14, 5), new T.MeshLambertMaterial({ color: steel })))
+    for (let x = -26; x <= 25; x += 5.7) {
+      const height = cableHeight(x) - 8.4
+      piece(bridge, steel, x, 8.4 + height / 2, z, .16, height, .16)
+    }
+  }
+  scene.add(bridge)
+}
+
+export function makeBerkeleyScene(route: LoopRoute): CourseScene {
+  const { scene, detail, sun, sky } = daylight(['#d1dedb', '#7faec9'], .0022,
+    new T.Vector3(-.64, .41, -.58).normalize())
+  groundMesh(scene, berkeleyGround, ['#a2a77c', '#71834e', '#ad9e7f'], 920)
+  pavedRoad(scene, route, false)
+  addBerkeleyBay(scene)
+
+  const piece = painter()
+  const clearance = new RouteClearance(route)
+  const rng = random(94704)
+  const groves: [number, number, number][] = [[-63, 65, 7], [-57, 53, 8.5], [-50, 69, 9], [-42, 53, 6]]
+  const grasses: Piece[] = []
+  const flowers: Piece[] = []
+  const rocks: Piece[] = []
+  const roadRocks = [
+    { at: 68, height: .19, width: .49 },
+    { at: 172, height: .15, width: .40 },
+    { at: 316, height: .21, width: .54 },
+    { at: 493, height: .17, width: .43 },
+    { at: 654, height: .22, width: .56 },
+  ]
+  const wheelLine = Array.from({ length: Math.ceil(route.length * 3) }, (_, i) => {
+    const at = i / 3
+    const { point, right } = route.frameAt(at)
+    return { at, point: point.addScaledVector(right, riderLaneOffset) }
+  })
+  const contacts = roadRocks.map(({ at, height }) => ({ at, height }))
+  const roadPieces: Piece[] = roadRocks.map(({ at, height, width }, i) => {
+    const { point, right } = route.frameAt(at)
+    point.addScaledVector(right, riderLaneOffset)
+    return { x: point.x, y: point.y + height * .2, z: point.z, width, height, depth: width * .85,
+      angle: i * 1.7, color: i % 2 ? '#aaa495' : '#8c8a80' }
+  })
+  for (let i = 0; i < 220; i++) {
+    const z = 129 - i * 1.03
+    const x = berkeleyShore(z) + 4 + rng() * 3.7
+    const height = .38 + rng() * .7
+    const rock = { x, y: berkeleyGround(x, z) + .12, z, width: height * 1.6, height, depth: height * 1.8,
+      angle: rng() * Math.PI, color: ['#7d8277', '#989388', '#a8a295'][i % 3] }
+    let contact: typeof wheelLine[number] | undefined
+    let gap = .59 * Math.max(rock.width, rock.depth) + .06
+    if (clearance.distance(x, z) < 3) {
+      for (const sample of wheelLine) {
+        const distance = Math.hypot(sample.point.x - x, sample.point.z - z)
+        if (distance >= gap) continue
+        gap = distance
+        contact = sample
+      }
+    }
+    if (contact) {
+      const low = .15 + height * .13
+      contacts.push({ at: contact.at, height: low })
+      roadPieces.push({ ...rock, y: contact.point.y + low * .15, height: low })
+    } else rocks.push(rock)
+  }
+  batch(detail, rocks, new T.IcosahedronGeometry(.67, 0))
+  batch(scene, roadPieces, new T.IcosahedronGeometry(.67, 0))
+  for (let i = 0; i < 1240; i++) {
+    const x = -108 + rng() * 285
+    const z = -174 + rng() * 320
+    if (x < berkeleyShore(z) + 6 || clearance.distance(x, z) < 4.8) continue
+    const y = berkeleyGround(x, z)
+    if (i % 7 === 0 && x > 7 && clearance.distance(x, z) > 11) groves.push([x, z, 4 + rng() * 7])
+    else {
+      const height = .20 + rng() * .45
+      grasses.push({ x, y: y + height / 3, z, width: .48, height, depth: .45, color: i % 3 ? '#7f8e54' : '#b1a16a' })
+      if (i % 4 === 0) flowers.push({ x, y: y + height * .72, z, width: .25, height: .21, depth: .25, color: '#e6a444' })
+    }
+  }
+  trees(detail, groves, berkeleyGround, true)
+  batch(detail, grasses, new T.ConeGeometry(.6, 1, 5))
+  batch(detail, flowers, new T.IcosahedronGeometry(.65, 0))
+
+  const signs = new T.Group()
+  for (const [at, label, side] of [[25, 'BERKELEY MARINA', 1], [scenarios.berkeley.discovery.at, 'CÉSAR CHÁVEZ PARK', 1]] as const) {
+    const { point, right, tangent } = route.frameAt(at)
+    point.addScaledVector(right, side * 5.4)
+    const sign = new T.Group()
+    sign.position.set(point.x, berkeleyGround(point.x, point.z), point.z)
+    sign.rotation.y = Math.atan2(-tangent.x, -tangent.z)
+    for (const x of [-1.65, 1.65]) piece(sign, '#626252', x, .93, 0, .15, 1.86, .18)
+    piece(sign, '#45635e', 0, 2.08, 0, 4.3, .66, .18)
+    cover(sign, fascia(label, '#274e49', '#fbefc8', true), 0, 2.08, .102, 4.18, .57)
+    signs.add(sign)
+  }
+  scene.add(signs)
+
+  const kiteGeometry = new T.BufferGeometry()
+  kiteGeometry.setAttribute('position', new T.Float32BufferAttribute([0, 1, 0, -1, 0, 0, 0, -1.65, 0, 1, 0, 0], 3))
+  kiteGeometry.setIndex([0, 1, 2, 0, 2, 3])
+  const kites = ['#d9654f', '#e7b553', '#5b9b96', '#d77e60'].map((color, i) => {
+    const kite = new T.Mesh(kiteGeometry, new T.MeshBasicMaterial({ color, side: T.DoubleSide }))
+    kite.scale.setScalar(1.2 + i * .18)
+    const tail = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3([
+      new T.Vector3(0, -1.6, 0), new T.Vector3(.48, -2.4, 0), new T.Vector3(.21, -3.2, .2), new T.Vector3(.75, -4.1, .25),
+    ]), 10, .06, 5), kite.material)
+    kite.add(tail)
+    scene.add(kite)
+    return kite
+  })
+
+  const boards = [[42, -1], [109, 1], [204, -1], [311, -1], [423, 1], [541, -1]].map(([offset, side]) =>
+    makeBillboard(scene, route, scenarios.berkeley.start + offset, side, 'berkeley'))
+  function showEvents() {
+    const events = upcomingBayEvents()
+    const panels = events.length ? events.map(event => ({
+      label: event.city.toUpperCase() + '  /  FAMILY EVENTS', title: event.title,
+      footer: (eventDay(event) + ' · ' + eventHours(event) + ' PT').toUpperCase(), url: event.url,
+    })) : Object.entries(bayEventCalendars).map(([city, source]) => ({
+      label: city.toUpperCase(), title: 'Family events calendar', footer: 'FIND UPCOMING EVENTS', url: source.url,
+    }))
+    boards.forEach((paint, i) => paint(panels[i]))
+  }
+  showEvents()
+  return {
+    scene, detail, sunlight: sun, shadows: false, startRide: showEvents,
+    mission() {},
+    roadContact: makeRoadContact(route.length, contacts, 'stone'),
+    animate(time, eye) {
+      sky.sky.position.copy(eye)
+      sky.time.value = time
+      kites.forEach((kite, i) => {
+        const sway = time * .65 + i * 1.5
+        kite.position.set(-74 + i * 19 + 1.7 * Math.sin(sway), 13 + i * 2 + Math.sin(sway * .9), -75 - i * 9)
+        kite.rotation.set(.2, -.5 + .18 * Math.cos(sway), .21 * Math.sin(sway))
+      })
+    },
   }
 }
 

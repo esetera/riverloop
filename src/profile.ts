@@ -1,4 +1,5 @@
 import type { LoopRoute } from './route.ts'
+import { ghostRiderColors } from './ghost.ts'
 
 function svg(tag: string, attributes: Record<string, string>) {
   const node = document.createElementNS('http://www.w3.org/2000/svg', tag)
@@ -24,12 +25,15 @@ export function drawProfile(chart: SVGSVGElement, route: LoopRoute, start: numbe
   const landmarkX = 4 + 216 * landmark / route.length
   const landmarkY = y(route.pointAt(start + landmark).y)
   const pin = svg('path', { d: `M${landmarkX} ${landmarkY - 5}l4 5-4 5-4-5Z`, class: 'profile-landmark' })
-  const ghost = svg('circle', { r: '3', class: 'profile-ghost', visibility: 'hidden' })
-  chart.append(pin, ghost, cursor, dot)
+  const ghosts = ghostRiderColors.map((color, i) => svg('circle', {
+    r: i === 0 ? '5.5' : '3', class: 'profile-ghost', visibility: 'hidden',
+    fill: i === 0 ? 'none' : color, stroke: i === 0 ? color : '#205557',
+  }))
+  chart.append(pin, ...ghosts.slice(1), cursor, dot, ghosts[0])
   return {
     scale: `${low}–${high} m elev.`,
     length: `${(route.length / 1000).toFixed(2)} km / lap`,
-    update(distance: number, ghostFraction?: number) {
+    update(distance: number, ghostFractions: (number | undefined)[] = []) {
       const fraction = (distance % route.length) / route.length
       const x = (4 + fraction * 216).toFixed(2)
       const height = route.pointAt(start + distance).y
@@ -37,11 +41,13 @@ export function drawProfile(chart: SVGSVGElement, route: LoopRoute, start: numbe
       cursor.setAttribute('x2', x)
       dot.setAttribute('cx', x)
       dot.setAttribute('cy', y(height).toFixed(2))
-      ghost.setAttribute('visibility', ghostFraction === undefined ? 'hidden' : 'visible')
-      if (ghostFraction !== undefined) {
-        ghost.setAttribute('cx', (4 + ghostFraction * 216).toFixed(2))
-        ghost.setAttribute('cy', y(route.pointAt(start + ghostFraction * route.length).y).toFixed(2))
-      }
+      ghosts.forEach((ghost, index) => {
+        const fraction = ghostFractions[index]
+        ghost.setAttribute('visibility', fraction === undefined ? 'hidden' : 'visible')
+        if (fraction === undefined) return
+        ghost.setAttribute('cx', (4 + fraction * 216).toFixed(2))
+        ghost.setAttribute('cy', y(route.pointAt(start + fraction * route.length).y).toFixed(2))
+      })
     },
   }
 }

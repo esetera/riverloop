@@ -1,5 +1,5 @@
 import * as T from 'three'
-import { artGround, auroraGround, cityGround, coastEdge, coastGround, echoGround, gackaGround, ponsonbyGround, thoughtGround, scenarios, type ScenarioId } from './scenarios.ts'
+import { artGround, auroraGround, berkeleyGround, cityGround, coastEdge, coastGround, echoGround, gackaGround, ponsonbyGround, thoughtGround, umbraGround, scenarios, type ScenarioId } from './scenarios.ts'
 import { groundHeight, riverCenter, riverEdge, RouteClearance, waterLevel, type LoopRoute } from './route.ts'
 
 // Actors share their small set of shapes and paints within each course.
@@ -32,7 +32,7 @@ function models() {
 }
 
 export function addGradeSigns(scene: T.Scene, route: LoopRoute, scenario: ScenarioId) {
-  const terrain = { valley: groundHeight, coast: coastGround, cyber: cityGround, echo: echoGround, machine: cityGround, airwave: coastGround, folio: cityGround, aurora: auroraGround, ideas: auroraGround, gacka: gackaGround, ponsonby: ponsonbyGround, thought: thoughtGround, art: artGround }[scenario]
+  const terrain = { valley: groundHeight, coast: coastGround, cyber: cityGround, echo: echoGround, machine: cityGround, airwave: coastGround, folio: cityGround, aurora: auroraGround, ideas: auroraGround, gacka: gackaGround, ponsonby: ponsonbyGround, thought: thoughtGround, art: artGround, berkeley: berkeleyGround, umbra: umbraGround }[scenario]
   const themes = {
     valley: ['#425346', '#f8dfad'],
     coast: ['#25556a', '#ffedc6'],
@@ -47,6 +47,8 @@ export function addGradeSigns(scene: T.Scene, route: LoopRoute, scenario: Scenar
     ponsonby: ['#234450', '#f9e0ad'],
     thought: ['#4e2c47', '#ffe0ba'],
     art: ['#272a3b', '#ffda9e'],
+    berkeley: ['#163d45', '#fff5d9'],
+    umbra: ['#33334b', '#ffd4ac'],
   }
   const [background, ink] = themes[scenario]
   const boards = new Map<boolean, T.MeshBasicMaterial>()
@@ -193,7 +195,7 @@ export function addBeachLife(scene: T.Scene, route: LoopRoute) {
     return { gull, wings }
   })
 
-  return (time: number) => {
+  function animate(time: number) {
     surfers.forEach(({ person, onWater, z }, i) => {
       const phase = time * (onWater ? .23 : .13) + i
       const along = z + Math.sin(phase) * (onWater ? 10 : 3)
@@ -224,6 +226,7 @@ export function addBeachLife(scene: T.Scene, route: LoopRoute) {
       wings[1].rotation.z = flap
     })
   }
+  return { animate, gulls: gulls.map(({ gull }) => gull) }
 }
 
 export function addValleyLife(scene: T.Scene, route: LoopRoute) {

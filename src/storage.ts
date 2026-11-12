@@ -1,7 +1,7 @@
 import { isScenarioId, scenarioIds } from './scenarios.ts'
 import type { ScenarioId } from './scenarios.ts'
-import { calendarDay, ghostKey, recordMinutes, validTrace } from './progress.ts'
-import type { RideProgress } from './progress.ts'
+import { calendarDay, ghostKey, recentCadenceLaps, recordCadenceLap, recordMinutes, validTrace } from './progress.ts'
+import type { CadenceGhostHistory, RideProgress } from './progress.ts'
 import { efforts, rideModes } from './session.ts'
 import type { Effort, RideMode, Summary } from './session.ts'
 
@@ -137,10 +137,19 @@ export function loadSave(): Save {
       if (typeof spread === 'number' && Number.isFinite(spread) && spread >= 0) (progress.bestClimbs ??= {})[id] = spread
     }
     const ghosts = record(savedProgress.ghosts)
-    for (const id of scenarioIds) for (const cadence of [true, false]) {
-      const key = ghostKey(id, cadence)
+    const cadenceGhosts = record(savedProgress.cadenceGhosts)
+    for (const id of scenarioIds) {
+      const key = ghostKey(id, false)
       const trace = ghosts[key]
       if (validTrace(trace)) progress.ghosts[key] = trace
+
+      const saved = record(cadenceGhosts[id])
+      const recent = Array.isArray(saved.recent) ? saved.recent.filter(validTrace).slice(0, recentCadenceLaps) : []
+      let history: CadenceGhostHistory | undefined = validTrace(saved.best) ? { best: saved.best, recent: [] } : undefined
+      for (const lap of recent.reverse()) history = recordCadenceLap(history, lap)
+      const previousLap = ghosts[ghostKey(id, true)]
+      if (!history && validTrace(previousLap)) history = recordCadenceLap(undefined, previousLap)
+      if (history) (progress.cadenceGhosts ??= {})[id] = history
     }
   } catch {
     // A blocked or corrupt store still allows a complete ride.

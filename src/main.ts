@@ -4,10 +4,10 @@ import { RideRadio } from './ride-radio.ts'
 import { CadenceSensor } from './cadence.ts'
 import { CadenceRideInput, SimulatedRideInput } from './input.ts'
 import { HeartRateSensor } from './heart-rate.ts'
-import { calendarDay, ClimbRecorder, dailyMinutes, dailyRoute, ghostKey, ghostPosition, ghostTime, LapRecorder, recordMilestones, recordMinutes, weekSeconds, weekStart } from './progress.ts'
+import { cadenceReplay, calendarDay, ClimbRecorder, dailyMinutes, dailyRoute, ghostKey, ghostPosition, ghostTime, LapRecorder, recordCadenceLap, recordMilestones, recordMinutes, weekSeconds, weekStart } from './progress.ts'
 import { riverCenter } from './route.ts'
 import { drawProfile } from './profile.ts'
-import { coastEdge, echoLake, isScenarioId, scenarioIds, scenarios } from './scenarios.ts'
+import { berkeleyShore, coastEdge, echoLake, isScenarioId, scenarioIds, scenarios } from './scenarios.ts'
 import type { ScenarioId } from './scenarios.ts'
 import { RideSession, clockText, efforts, rideModes } from './session.ts'
 import type { Effort } from './session.ts'
@@ -19,6 +19,7 @@ import { loadThoughtRide, thoughtLap, type ThoughtRide } from './thinking.ts'
 import { researchProvider } from './ride-research.ts'
 import { setupRoadLinks } from './road-links.ts'
 import { setupArtGallery } from './art-gallery.ts'
+import { renderBayEvents } from './bay-events.ts'
 
 function element<T extends HTMLElement>(id: string) {
   const found = document.getElementById(id)
@@ -56,6 +57,9 @@ const heartSensor = new HeartRateSensor()
 const app = element('app')
 const roadLinks = setupRoadLinks()
 const artGallery = setupArtGallery(roadLinks.save)
+const bayEvents = element<HTMLDialogElement>('bay-events')
+const bayEventsButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-bay-events]')]
+let resumeAfterBayEvents = false
 const menu = element<HTMLDetailsElement>('ride-menu')
 const conceptForm = element<HTMLFormElement>('concept-form')
 const conceptInput = element<HTMLInputElement>('concept')
@@ -97,6 +101,8 @@ const weeklyProgress = element<HTMLProgressElement>('weekly-progress')
 const weeklyGoalInput = element<HTMLInputElement>('weekly-goal')
 const ghostEnabled = element<HTMLInputElement>('ghost-enabled')
 const ghostReadout = element('ghost-readout')
+const ghostPace = element('ghost-pace')
+const recentGhostLegend = element('recent-ghost-legend')
 const rideLandmark = element('ride-landmark')
 const discoveryToast = element('discovery-toast')
 const rideScreen = element('ride-screen')
@@ -156,9 +162,9 @@ let discoveryReached = false
 let discoveryDistance = 0
 let discoveryNoticeUntil = 0
 let lapRecorder = new LapRecorder(route.length)
-let replay: number[] | undefined
+let replays: (number[] | undefined)[] = []
 let savedLastLap = false
-let replayFraction: number | undefined
+let replayFractions: (number | undefined)[] = []
 let climbRecorder: ClimbRecorder | undefined
 let effortDetailsUntil = 0
 
@@ -227,6 +233,12 @@ function makeMap(id: string) {
   } else if (scenarioId === 'echo') {
     const { x, z, rx, rz } = echoLake
     svg.append(svgNode('ellipse', { cx: String(x), cy: String(z), rx: String(rx), ry: String(rz), class: 'map-sea' }))
+  } else if (scenarioId === 'berkeley') {
+    const shore = Array.from({ length: 40 }, (_, i) => {
+      const z = top + i / 39 * (bottom - top)
+      return `${i === 0 ? 'M' : 'L'}${berkeleyShore(z).toFixed(1)},${z.toFixed(1)}`
+    }).join(' ')
+    svg.append(svgNode('path', { d: `${shore} H${left} V${top} Z`, class: 'map-sea' }))
   }
   const road = Array.from({ length: 125 }, (_, i) => {
     const p = route.pointAt(i / 125 * route.length)
@@ -234,7 +246,7 @@ function makeMap(id: string) {
   }).join(' ') + ' Z'
   svg.append(svgNode('path', { d: road, class: 'map-road' }))
   if (scenarioId === 'valley') svg.append(svgNode('circle', { cx: '105', cy: '-22', r: '8', class: 'map-site' }))
-  if (['echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art'].includes(scenarioId)) {
+  if (['echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art', 'berkeley', 'umbra'].includes(scenarioId)) {
     const site = route.pointAt(scenario.discovery.at)
     svg.append(svgNode('circle', { cx: site.x.toFixed(1), cy: site.z.toFixed(1), r: '7', class: 'map-site' }))
   }
@@ -257,6 +269,7 @@ function showScenario() {
   app.dataset.scenario = scenarioId
   scenarioPicker.value = scenarioId
   element('tune-airwave').hidden = scenarioId !== 'airwave'
+  for (const button of bayEventsButtons) button.hidden = scenarioId !== 'berkeley'
   conceptForm.hidden = scenarioId !== 'ideas'
   thoughtForm.hidden = scenarioId !== 'thought'
   if (scenarioId === 'thought' && thought) world?.setThought(thought, 0)
@@ -444,9 +457,10 @@ function showCadence() {
   const needsSensor = session.usesCadence && !connected
   pairCadence.disabled = !cadenceSensor.available || connecting
   setText(pairCadence, connected ? 'Disconnect sensor' : 'Pair cadence sensor')
-  setText(cadenceStatus, cadenceSensor.notice || (cadenceSensor.available ?
-    'Simulated speed by default. Spin the pedals before pairing.' :
-    'Simulated speed. Open in desktop Chrome to pair a Bluetooth sensor.'))
+  const status = cadenceSensor.notice || (cadenceSensor.available ?
+    'Spin the pedals before pairing. Pair to control your speed.' :
+    'Simulated speed. Open in desktop Chrome to pair a Bluetooth sensor.')
+  setText(cadenceStatus, connected ? `${status} Lap ghosts save automatically.` : status)
   reconnectCadence.hidden = reconnectStatus.hidden = !needsSensor
   reconnectCadence.disabled = connecting
   resume.disabled = worldLost || needsSensor
@@ -520,18 +534,27 @@ function showRide() {
   setText(lap, String(session.laps + 1).padStart(2, '0'))
   rideProgress.value = session.isMission ? Math.min(1, session.distance / discoveryDistance) : session.elapsed / session.duration
   rideMap(scenario.start + session.distance)
-  replayFraction = undefined
-  ghostReadout.hidden = !preferences.ghost
-  if (preferences.ghost && replay) {
-    const elapsed = lapRecorder.lapElapsed(session.elapsed)
-    replayFraction = ghostPosition(replay, elapsed)
-    const delta = elapsed - ghostTime(replay, session.lapProgress)
-    setText(ghostReadout, Math.abs(delta) < .25 ? 'Ghost · Even pace' :
-      `Ghost · ${Math.abs(delta).toFixed(1)}s ${delta > 0 ? 'behind' : 'ahead'}`)
-  } else if (preferences.ghost) {
-    setText(ghostReadout, 'Ghost · Complete a lap to record')
+  const showGhosts = session.usesCadence || preferences.ghost
+  const lapTime = lapRecorder.lapElapsed(session.elapsed)
+  replayFractions = showGhosts ? replays.map(trace => {
+    if (!trace) return
+    const fraction = ghostPosition(trace, lapTime)
+    return fraction < 1 ? fraction : undefined
+  }) : []
+  ghostReadout.hidden = !showGhosts
+  const paceTrace = replays[session.usesCadence ? 0 : 1]
+  ghostPace.classList.toggle('best-ghost-pace', session.usesCadence && !!paceTrace)
+  recentGhostLegend.hidden = !session.usesCadence || replays.length < 2
+  if (showGhosts) {
+    if (paceTrace) {
+      const delta = lapTime - ghostTime(paceTrace, session.lapProgress)
+      const pace = Math.abs(delta) < .25 ? 'Even pace' : `${Math.abs(delta).toFixed(1)}s ${delta > 0 ? 'behind' : 'ahead'}`
+      setText(ghostPace, `${session.usesCadence ? 'Best lap' : 'Ghost'} · ${pace}`)
+    } else {
+      setText(ghostPace, session.usesCadence ? 'Ghosts appear after your first lap.' : 'Finish a lap to save a ghost for your next ride.')
+    }
   }
-  rideProfile.update(session.distance, replayFraction)
+  rideProfile.update(session.distance, replayFractions)
   const metres = Math.max(0, Math.ceil(discoveryDistance - session.distance))
   setText(rideLandmark, `${scenario.discovery.name} · ${discoveryReached ? 'Reached' : metres + ' m'}`)
   missionStatus.hidden = !session.isMission
@@ -585,7 +608,8 @@ function beginRide(minutes: number, day?: number, mission = false) {
   discoveryReached = savedLastLap = false
   discoveryNoticeUntil = 0
   lapRecorder = new LapRecorder(route.length)
-  replay = rideProgressData.ghosts[ghostKey(scenarioId, session.usesCadence)]
+  replays = session.usesCadence ? cadenceReplay(rideProgressData.cadenceGhosts?.[scenarioId]) :
+    [undefined, rideProgressData.ghosts[ghostKey(scenarioId, false)]]
   lastEffort = undefined
   warnedAt = -1
   effortDetailsUntil = 0
@@ -626,7 +650,9 @@ function showCompletion() {
   const discovered = element('completed-discovery')
   discovered.hidden = !discoveryReached
   setText(discovered, `Reached ${scenario.discovery.name}`)
-  element('completed-ghost').hidden = !savedLastLap
+  const completedGhost = element('completed-ghost')
+  completedGhost.hidden = !savedLastLap
+  setText(completedGhost, session.usesCadence ? 'Completed laps saved as ghosts.' : 'Last lap saved for your ghost.')
   const finishedMission = element('completed-mission')
   finishedMission.hidden = !session.isMission || !discoveryReached
   setText(finishedMission, `${scenario.mission.name} · Mission complete`)
@@ -657,7 +683,13 @@ function updateTime(now: number) {
     climbRecorder?.update(session.elapsed, session.distance, cadenceSensor.rpm())
     const trace = lapRecorder.update(session.elapsed, session.distance)
     if (trace) {
-      rideProgressData.ghosts[ghostKey(scenarioId, session.usesCadence)] = trace
+      if (session.usesCadence) {
+        const histories = (rideProgressData.cadenceGhosts ??= {})
+        histories[scenarioId] = recordCadenceLap(histories[scenarioId], trace)
+        replays = cadenceReplay(histories[scenarioId])
+      } else {
+        rideProgressData.ghosts[ghostKey(scenarioId, false)] = trace
+      }
       savedLastLap = true
       persist()
     }
@@ -953,6 +985,21 @@ scenarioPicker.addEventListener('change', () => {
   scenarioPicker.value = scenarioId
 })
 start.addEventListener('click', () => beginRide(preferences.minutes))
+for (const button of bayEventsButtons) button.addEventListener('click', () => {
+  const upcoming = renderBayEvents(element('bay-events-list'))
+  element('bay-events-week').hidden = !upcoming
+  element('bay-events-ended').hidden = upcoming
+  resumeAfterBayEvents = session.phase === 'riding'
+  if (resumeAfterBayEvents) pauseRide(false)
+  bayEvents.showModal()
+})
+bayEvents.addEventListener('close', () => {
+  if (resumeAfterBayEvents && !resume.disabled) {
+    resumeRide()
+    bayEventsButtons.find(button => rideScreen.contains(button))?.focus({ preventScroll: true })
+  }
+  resumeAfterBayEvents = false
+})
 missionStart.addEventListener('click', () => beginRide(0, undefined, true))
 element('show-mission').addEventListener('click', () => {
   element('mission-plan').scrollIntoView({ block: 'center' })
@@ -1080,7 +1127,7 @@ element('visual-only').addEventListener('click', () => {
 })
 
 document.addEventListener('keydown', event => {
-  if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || settings.open) return
+  if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || settings.open || bayEvents.open) return
   const target = event.target
   if (target instanceof HTMLElement && target.closest('input,select,textarea,[contenteditable],summary,#ride-radio')) return
   const key = event.key.toLowerCase()
@@ -1196,11 +1243,13 @@ function frame(now: number) {
     element<HTMLButtonElement>('jump-lap').disabled = phase !== 'riding'
     if (phase !== 'riding') element<HTMLButtonElement>('jump-effort').disabled = true
   }
-  const ghostDistance = (phase === 'riding' || phase === 'paused') && replayFraction !== undefined && replayFraction < 1 ?
-    scenario.start + (session.laps + replayFraction) * route.length : undefined
+  const ghostDistances = phase === 'riding' || phase === 'paused' ? replayFractions.map(fraction =>
+    fraction === undefined ? undefined : scenario.start + (session.laps + fraction) * route.length) : undefined
   if (session.isMission && phase !== 'idle') world?.setMissionProgress(Math.min(1, session.distance / discoveryDistance))
-  world?.draw(phase === 'idle' ? scenario.start : scenario.start + session.distance,
-    dt, phase === 'idle', phase === 'idle' || phase === 'riding', ghostDistance, phase === 'riding' || phase === 'paused')
+  const sceneSound = world?.draw(phase === 'idle' ? scenario.start : scenario.start + session.distance,
+    dt, phase === 'idle', phase === 'idle' || phase === 'riding', ghostDistances,
+    phase === 'riding' || phase === 'paused', phase === 'riding' && audio.sceneAudible)
+  if (sceneSound) audio.updateScene(sceneSound)
   if (developer && ++frames && now - fpsSince >= 1000) {
     const fps = Math.round(frames * 1000 / (now - fpsSince))
     setText(element('fps'), `${fps} FPS · ${world?.renderCalls ?? 0} draws`)

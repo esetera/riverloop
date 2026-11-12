@@ -30,6 +30,7 @@ Riverloop’s terrain, scenery, animated vehicles and wildlife, bike artwork, so
 
 ## Place and lesson references
 
+- Umbra Salt Flats uses original procedural geometry and shaders for the terrain, salt reflections, observatory, stars, and solar eclipse.
 - Gacka Valley is a compressed original recreation of the Sinac area. [Photographs of Majerovo Vrilo](https://commons.wikimedia.org/wiki/Category:Majerovo_vrilo) were used as visual references for the original weathered timber, shingle, and river materials. The [Northern Velebit National Park Gacka Valley guide](https://np-sjeverni-velebit.hr/www/en/visiting/surroundings/gacka-valley) documents the springs and watermills at Majerovo Vrilo.
 - Ponsonby Ridge is a compressed original recreation inspired by [Auckland Council’s Ponsonby Road Plan](https://www.aucklandcouncil.govt.nz/content/dam/ac/docs/plans/place/ponsonby-road-plan.pdf) and its [Western Park Path guide](https://www.aucklandcouncil.govt.nz/en/parks-recreation/get-outdoors/aklpaths/path-detail/340.html). The [Three Lamps then-and-now photographs](https://www.donovanimages.co.nz/media/then-and-now/heritage-images/Ponsonby-Three-Lamps-PO-W00392/Ponsonby-PO-W00392-1924-2021.html) were visual references for the original post office geometry. Shops use original painted façades. Neither ride is a navigation route.
 - Idea Circuit’s diagrams and lesson layout are original. The configured agent writes the lesson and provides source links for its research.

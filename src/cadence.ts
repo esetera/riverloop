@@ -46,7 +46,7 @@ export class CadenceSensor extends BluetoothSensor {
       measurement: 0x2a5b,
       namePrefix: 'BK9',
       wakeHint: 'Spin the pedals and try again.',
-      connectedHint: 'Pedal to move.',
+      connectedHint: 'Pedal faster to move faster.',
       async validate(service) {
         const features = await (await service.getCharacteristic(0x2a5c)).readValue()
         if (features.byteLength < 2 || !(features.getUint16(0, true) & 2)) {
