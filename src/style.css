@@ -601,15 +601,15 @@ fieldset small, .developer-settings small { color: var(--muted); font-size: 10.5
 .art-gallery {
   position: absolute;
   z-index: 2;
-  top: -8px;
+  top: 5px;
   left: 50%;
   translate: -50% 0;
   display: grid;
-  grid-template-columns: minmax(0, .87fr) minmax(0, 1.3fr);
-  gap: 7px;
+  grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);
+  gap: 8px;
   align-items: start;
-  width: min(655px, calc(100% - 490px));
-  max-height: calc(39svh - 72px);
+  width: min(840px, calc(100% - 575px));
+  max-height: min(45svh, 390px);
   overflow: auto;
   pointer-events: auto;
   color: #fbf1de;
@@ -617,21 +617,31 @@ fieldset small, .developer-settings small { color: var(--muted); font-size: 10.5
 .art-gallery :is(figure, .art-caption) {
   border: 1px solid #ffe2a481;
   border-radius: 9px;
-  background: #242132d9;
+  background: #242132ed;
 }
-.art-gallery figure {
+.art-gallery figure { margin: 0; overflow: hidden; }
+#view-artwork {
+  position: relative;
   display: grid;
   place-items: center;
-  margin: 0;
-  padding: 7px;
-  background: #191624bb;
-}
-.art-gallery img {
-  display: block;
   width: 100%;
-  height: min(180px, 20svh);
-  object-fit: contain;
+  padding: 0;
+  border: 0;
+  background: #191624;
 }
+#view-artwork:focus-visible { outline-offset: -3px; }
+#view-artwork img { display: block; width: 100%; height: clamp(150px, 31svh, 365px); object-fit: contain; }
+#view-artwork span {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: #191624f2;
+  color: #ffe4b4;
+  font-size: 12px;
+}
+#view-artwork:hover span { background: #ffe4b4; color: #191624; }
 .art-caption { padding: 12px 14px; }
 .art-period { font-size: 11px; font-weight: 800; color: #f0ca8f; }
 .art-caption h2 {
@@ -644,24 +654,43 @@ fieldset small, .developer-settings small { color: var(--muted); font-size: 10.5
 .art-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .art-actions button { min-height: 33px; padding-inline: 9px; font-size: 11px; background: #ffffff0c; }
 .art-actions [aria-pressed="true"] { background: #f3d594; border-color: #f3d594; color: #211c27; }
-@media (max-width: 1150px) {
-  .art-gallery { width: min(590px, 63%); }
+.art-viewer {
+  width: min(1180px, calc(100vw - 24px));
+  max-height: calc(100svh - 24px);
+  padding: clamp(10px, 2vw, 20px);
+  border: 1px solid #ffe2a481;
+  border-radius: 12px;
+  background: #191624;
+  color: var(--ink);
 }
-@media (max-width: 750px) {
-  .art-gallery { width: min(510px, 100%); grid-template-columns: minmax(83px, .65fr) minmax(0, 1fr); }
+.art-viewer::backdrop { background: #100e18e8; }
+.art-viewer header { display: flex; justify-content: space-between; align-items: start; gap: 12px; margin-bottom: 10px; }
+.art-viewer form { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+#zoom-artwork { padding-inline: 9px; font-size: 12px; }
+.art-viewer h2 { margin: 0 0 2px; font: 530 clamp(20px, 3vw, 34px)/1.12 Fraunces, Georgia, serif; }
+.art-viewer p { font-size: 12px; color: #dfc9b7; }
+.art-viewport { height: min(72svh, 800px); overflow: auto; }
+.art-viewport img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.art-viewer.zoomed img { width: max(170%, 900px); height: auto; }
+[data-scenario="art"] .warning { top: auto; bottom: 68px; z-index: 3; }
+[data-scenario="art"] .discovery-toast { top: auto; bottom: 118px; z-index: 3; }
+@media (max-width: 1080px) {
+  .art-gallery { width: min(670px, 100%); }
   [data-scenario="art"] .ride-hud :is(.effort-panel, .ride-route-panels) {
     position: absolute;
-    bottom: 122px;
-    width: min(37%, 157px);
+    bottom: 145px;
+    width: min(38%, 185px);
     min-width: 0;
   }
   [data-scenario="art"] .effort-panel { left: 0; }
   [data-scenario="art"] .ride-route-panels { right: 0; }
-  [data-scenario="art"] .warning { top: calc(39svh - 68px); z-index: 3; }
-  .art-gallery figure { padding: 6px; }
-  .art-caption { padding: 10px; }
+  [data-scenario="art"] .profile-panel { width: 100%; }
+}
+@media (max-width: 600px) {
+  .art-gallery { width: min(440px, 100%); grid-template-columns: 1fr; max-height: min(53svh, calc(100% - 140px)); }
+  #view-artwork img { height: clamp(95px, 29svh, 265px); }
+  .art-caption { padding: 8px 10px; }
   .art-caption h2 { font-size: 18px; }
-  .art-observation { margin-block: 7px; line-height: 1.38; }
   .art-actions button { min-height: 32px; }
 }
 @media (max-width: 420px) {
@@ -681,11 +710,25 @@ fieldset small, .developer-settings small { color: var(--muted); font-size: 10.5
 #tune-airwave { padding-inline: 0; margin-top: 3px; color: var(--mint); }
 
 /* The ride scene stays clear between the compact instruments and the menu. */
+.header-controls { display: flex; align-items: center; gap: 8px; }
+#quick-music .icon { width: 16px; height: 16px; color: var(--gold); }
+#quick-music-status {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--gold);
+}
+@media (max-width: 360px) {
+  .header-controls { gap: 4px; }
+  #quick-music .icon, .wordmark small { display: none; }
+  #app:is([data-phase="riding"], [data-phase="paused"]) .logo-ring { display: none; }
+}
 .ride-menu { position: relative; z-index: 2; }
 .ride-menu summary {
   list-style: none; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px;
   border-radius: 8px; border: 1px solid var(--line); background: #22382ce6;
-  color: var(--ink); font-size: 13px; font-weight: 800; cursor: pointer;
+  color: var(--ink); font-size: 13px; font-weight: 800; cursor: pointer; white-space: nowrap;
 }
 .ride-menu summary::-webkit-details-marker { display: none; }
 .ride-menu[open] summary { border-color: var(--gold); }
@@ -716,7 +759,9 @@ fieldset small, .developer-settings small { color: var(--muted); font-size: 10.5
   [data-scenario] .ride-metrics { bottom: 68px; width: min(84vw, 345px); }
 }
 @media (max-width: 530px) {
-  .ride-menu summary { min-height: 38px; padding-inline: 8px; }
+  .masthead .logo-ring { width: 35px; height: 35px; }
+  .masthead .wordmark { gap: 7px; }
+  .ride-menu summary { min-height: 38px; padding-inline: 7px; gap: 5px; }
   .ride-metrics .ride-metric { padding: 7px 8px; }
 }
 .road-links { position: absolute; inset: 0; pointer-events: none; }

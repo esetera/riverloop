@@ -48,6 +48,7 @@ export class RideSession {
   duration = 600
   easy = false
   debugged = false
+  warmupLap = false
   private schedule
   private readonly input: RideInput
   private readonly route: LoopRoute
@@ -107,8 +108,13 @@ export class RideSession {
   get lapLength() { return this.route.length }
   get laps() { return Math.floor((this.distance + 1e-7) / this.lapLength) }
   get lapProgress() { return (this.distance % this.lapLength) / this.lapLength }
+  get showsCadenceTarget() {
+    return this.mode === 'steady' && !this.easy && !this.warmupLap && this.stage !== 'Cool-down'
+  }
+
   get stage() {
     if (this.easy) return 'Easy for this ride'
+    if (this.warmupLap) return 'Warm-up lap'
     if (this.mode === 'scenic') return 'Scenic ride'
     if (this.elapsed < this.schedule.warmup) return 'Warm-up'
     if (this.elapsed >= this.schedule.cooldownAt) return 'Cool-down'
@@ -116,7 +122,7 @@ export class RideSession {
   }
 
   get cue() {
-    if (this.easy) return { effort: 'Easy' as const, next: undefined }
+    if (this.easy || this.warmupLap) return { effort: 'Easy' as const, next: undefined }
     if (this.mode === 'scenic') return { effort: 'Easy' as const, next: undefined }
     if (this.mode === 'steady') {
       const stage = this.stage

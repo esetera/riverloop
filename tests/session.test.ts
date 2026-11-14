@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { SimulatedRideInput, simulationSpeed } from '../src/input.ts'
-import { cadenceReplay, calendarDay, lapSplits, recordCadenceLap } from '../src/progress.ts'
+import { cadenceReplay, calendarDay, lapSplits, needsDailyWarmup, recordCadenceLap } from '../src/progress.ts'
 import { LoopRoute, riverEdge, startingDistance } from '../src/route.ts'
 import { scenarios } from '../src/scenarios.ts'
 import { RideSession, clockText, makeSchedule } from '../src/session.ts'
@@ -29,6 +29,24 @@ test('Steady keeps a consistent effort between warm-up and cool-down', () => {
   assert.equal(ride.cue.effort, 'Steady')
   ride.tick(160)
   assert.equal(ride.cue.effort, 'Easy')
+})
+
+test('the first lap can stay easy past the timed warm-up without showing a cadence target', () => {
+  const ride = new RideSession(new SimulatedRideInput(), new LoopRoute(), startingDistance, 'steady')
+  ride.start(600)
+  ride.warmupLap = true
+  ride.tick(121)
+  assert.equal(ride.laps, 0)
+  assert.equal(ride.stage, 'Warm-up lap')
+  assert.deepEqual(ride.cue, { effort: 'Easy', next: undefined })
+  assert.equal(ride.showsCadenceTarget, false)
+
+  ride.tick(ride.lapLength / simulationSpeed - ride.elapsed + .01)
+  assert.equal(ride.laps, 1)
+  ride.warmupLap = false
+  assert.equal(ride.stage, 'Main ride')
+  assert.equal(ride.cue.effort, 'Steady')
+  assert.equal(ride.showsCadenceTarget, true)
 })
 
 test('ten minutes includes two-minute warm-up and cool-down and four complete laps', () => {
@@ -136,10 +154,12 @@ test('storage recovers from bad saves and preserves completed sessions', () => {
     value = JSON.stringify({ version: 1, preferences: { music: true, musicStyle: 'arps' } })
     assert.equal(loadSave().preferences.musicVolume, 50)
     assert.equal(loadSave().preferences.music, true)
+    assert.equal(loadSave().preferences.dailyWarmup, true)
     value = JSON.stringify({ version: 1, preferences: { musicVolume: 101 } })
     assert.equal(loadSave().preferences.musicVolume, 50)
     const preferences = defaultPreferences()
     preferences.minutes = 7
+    preferences.dailyWarmup = false
     preferences.speech = false
     preferences.musicStyle = 'breaks'
     preferences.musicVolume = 0
@@ -151,6 +171,17 @@ test('storage recovers from bad saves and preserves completed sessions', () => {
     progress.discovered.push('coast')
     writeSave(preferences, [ride], progress)
     assert.deepEqual(loadSave(), { version: 1, preferences, rides: [ride], progress })
+
+    const today = calendarDay()
+    const done = new Date().toISOString()
+    value = JSON.stringify({ version: 1, rides: [{ ...ride, endedAt: done, laps: 0 }] })
+    assert.equal(needsDailyWarmup(loadSave().progress, today), true)
+    value = JSON.stringify({ version: 1, rides: [{ ...ride, endedAt: done, laps: 1 }] })
+    assert.equal(needsDailyWarmup(loadSave().progress, today), false)
+    progress.lastLapDay = today
+    writeSave(preferences, [], progress)
+    assert.equal(needsDailyWarmup(loadSave().progress, today), false)
+    assert.equal(needsDailyWarmup(loadSave().progress, today + 1), true)
 
     const trace = (seconds: number) => Array.from({ length: lapSplits + 1 }, (_, i) => seconds * i / lapSplits)
     const best = trace(60)

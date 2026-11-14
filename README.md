@@ -23,7 +23,7 @@ Pick a **Ride scenario** and a ride length, then select **Start ride**. The defa
 
 **Start mission** takes you to the selected route’s landmark. The mission finishes when you reach the landmark. The clock counts up and you can keep riding or finish whenever you like.
 
-Choose **Scenic** for an easy spin, **Steady** for a cadence target you set, or **Rolling Hills** for effort cues based on the road. Steady’s live coaching uses a paired cadence sensor and starts after warm-up. Time, RPM, and BPM sit in a translucent panel at the lower left. The route and effort panels brighten for upcoming bends and effort changes. Tap **Details** to keep them bright.
+Choose **Scenic** for an easy spin, **Steady** for a cadence target you set, or **Rolling Hills** for effort cues based on the road. Steady’s live coaching uses a paired cadence sensor and starts after warm-up. By default, the first completed lap of each day is an easy warm-up with no RPM target, across all routes. You can turn this off in **Settings → Ride goals**. Time, RPM, and BPM sit in a translucent panel at the lower left. The route and effort panels brighten for upcoming bends and effort changes. Tap **Details** to keep them bright.
 
 The ride summary marks a new longest ride and a return after at least seven calendar days for rides of a minute or more. With a cadence sensor, Riverloop also compares the steadiness of your cadence on the same climb.
 
@@ -53,7 +53,7 @@ On a Galaxy Watch4 or Watch5, install [Heart for Bluetooth](https://play.google.
 
 When you open Settings during a ride, the clock and camera pause. Riverloop requests a screen wake lock while visible, including on battery. Settings shows whether the browser granted it. If you leave the tab or the computer sleeps, use **Resume ride** when you return.
 
-Open **Ride Radio → Electronic music** to choose and play a synthesized soundtrack. **Random** picks a style for each ride. **Fog Bloom** layers slowly changing pads and chimes. The **Tech house** group includes three original tracks: Afterhours, Harbor Signal, and Night Shift. **Music volume** starts at 50% and changes the soundtrack level independently of the other sounds. Ambient sound, spoken cues, and cycling sounds have separate switches. Cycling sounds add simulated drivetrain and breathing and start off by default. **Visual only** switches every sound off.
+Open **Ride Radio → Electronic music** to choose and play a synthesized soundtrack. **Random** picks a style for each ride. During a ride, use the **Music** menu at the top to play the next track or switch to a different random track. Glasswire and Switchyard layer syncopated breaks over synth bass; Tidal Echo and Night Buoy use deep bass and stereo dub echoes. **Fog Bloom** layers slowly changing pads and chimes. The **Tech house** group includes three original tracks: Afterhours, Harbor Signal, and Night Shift. **Music volume** starts at 50% and changes the soundtrack level independently of the other sounds. Ambient sound, spoken cues, and cycling sounds have separate switches. Cycling sounds add simulated drivetrain and breathing and start off by default. **Visual only** switches every sound off.
 
 ## Learn as you ride
 
@@ -63,7 +63,7 @@ In **Idea Circuit**, enter a topic and select **Load topic**. The agent looks up
 
 In **Thought Circuit**, enter a question and select **Plan thinking ride**. The agent researches it and writes four perspectives that take you from framing the decision to choosing a next step. If the question matches a topic in `~/.riverloop/thought-context.json`, the matching notes are sent with the question to the configured agent. The context file stays outside the site. Both forms show the agent’s name during research, which can take a minute or two.
 
-In **Art History**, eight works from the Art Institute of Chicago float above a dusk garden route. Each work stays in view until the next section of the course. Select **Hold artwork** to keep it on screen while you ride, and **Save for later** to save its museum page.
+In **Art History**, eight works from the Art Institute of Chicago float above a dusk garden route. Each work stays in view until the next section of the course. Select **View larger** to pause and inspect the artwork, **Hold artwork** to keep it on screen while you ride, or **Save for later** to save its museum page.
 
 The Croatia and Auckland rides are compressed scenic interpretations. See the [place references](ASSETS.md) for the real locations.
 

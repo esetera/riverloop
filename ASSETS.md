@@ -40,7 +40,7 @@ Riverloop’s terrain, scenery, animated vehicles and wildlife, bike artwork, so
 
 ## Art History gallery
 
-The Art Institute of Chicago provides the following public-domain artwork images under its [CC0 Open Access policy](https://www.artic.edu/image-licensing). Riverloop bundles the images locally. The gallery, display layouts, and captions are original to Riverloop.
+The Art Institute of Chicago provides the following public-domain artwork images under its [CC0 Open Access policy](https://www.artic.edu/image-licensing). Riverloop bundles images up to 1,686 pixels wide locally, from the museum’s [IIIF Image API](https://api.artic.edu/docs/#iiif-image-api). The gallery, display layouts, and captions are original to Riverloop.
 
 - Ancient Egyptian, [*Funerary Papyrus of Tayuhenutmut*](https://www.artic.edu/artworks/805), c. 1069–945 BCE.
 - Painter of Tarquinia RC 3984, [*Belly-Amphora (Storage Jar)*](https://www.artic.edu/artworks/52198), 550–540 BCE.

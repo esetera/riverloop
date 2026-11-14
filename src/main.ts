@@ -5,7 +5,7 @@ import { CadenceSensor } from './cadence.ts'
 import { CadenceRideInput, SimulatedRideInput } from './input.ts'
 import { HeartRateSensor } from './heart-rate.ts'
 import type { GhostRiderPose } from './ghost.ts'
-import { cadenceReplay, calendarDay, ClimbRecorder, dailyMinutes, dailyRoute, ghostKey, GhostReplay, ghostTime, LapRecorder, recordCadenceLap, recordMilestones, recordMinutes, weekSeconds, weekStart } from './progress.ts'
+import { cadenceReplay, calendarDay, ClimbRecorder, dailyMinutes, dailyRoute, ghostKey, GhostReplay, ghostTime, LapRecorder, needsDailyWarmup, recordCadenceLap, recordMilestones, recordMinutes, weekSeconds, weekStart } from './progress.ts'
 import { riverCenter } from './route.ts'
 import { drawProfile } from './profile.ts'
 import { berkeleyShore, coastEdge, echoLake, isScenarioId, scenarioIds, scenarios } from './scenarios.ts'
@@ -13,7 +13,7 @@ import type { ScenarioId } from './scenarios.ts'
 import { RideSession, clockText, efforts, rideModes } from './session.ts'
 import type { Effort } from './session.ts'
 import { defaultPreferences, isMusicStyle, loadSave, validCadenceTarget, validMinutes, validWeeklyGoal, writeSave } from './storage.ts'
-import type { Quality } from './storage.ts'
+import type { Preferences, Quality } from './storage.ts'
 import { RideWorld } from './world.ts'
 import { chapterAt, loadLesson, type Lesson } from './lessons.ts'
 import { loadThoughtRide, thoughtLap, type ThoughtRide } from './thinking.ts'
@@ -62,6 +62,9 @@ const bayEvents = element<HTMLDialogElement>('bay-events')
 const bayEventsButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-bay-events]')]
 let resumeAfterBayEvents = false
 const menu = element<HTMLDetailsElement>('ride-menu')
+const musicMenu = element<HTMLDetailsElement>('quick-music')
+const musicStatus = element('quick-music-status')
+const warmupEnabled = element<HTMLInputElement>('daily-warmup')
 const conceptForm = element<HTMLFormElement>('concept-form')
 const conceptInput = element<HTMLInputElement>('concept')
 const conceptStatus = element('concept-status')
@@ -166,6 +169,7 @@ let lapRecorder = new LapRecorder(route.length)
 let replays: (number[] | undefined)[] = []
 let ghostReplays: (GhostReplay | undefined)[] = []
 let savedLastLap = false
+let debugLapDay: number | undefined
 let ghostRiders: (GhostRiderPose | undefined)[] = []
 let climbRecorder: ClimbRecorder | undefined
 let effortDetailsUntil = 0
@@ -407,6 +411,10 @@ function showSound() {
   }
   const volumeText = `${preferences.musicVolume}%`
   musicStyleInput.value = preferences.musicStyle
+  const track = audio.selectedStyle(preferences.musicStyle)
+  const trackName = [...musicStyleInput.options].find(option => option.value === track)?.text
+  setText(musicStatus, radio.active ? 'Ride Radio playing' : !preferences.music ? 'Music off' :
+    preferences.muted || preferences.musicVolume === 0 ? `${trackName} · silent` : trackName ?? 'Electronic music')
   musicVolumeInput.value = String(preferences.musicVolume)
   musicVolumeInput.setAttribute('aria-valuetext', volumeText)
   setText(musicVolumeValue, volumeText)
@@ -426,6 +434,7 @@ function showSettings() {
   qualityInput.value = preferences.quality
   weeklyGoalInput.value = String(preferences.weeklyGoal)
   ghostEnabled.checked = preferences.ghost
+  warmupEnabled.checked = preferences.dailyWarmup
   world?.setQuality(preferences.quality)
   showSound()
   showHistory()
@@ -443,6 +452,8 @@ function showPhase() {
   element('scenario-picker').hidden = phase !== 'idle'
   rideScreen.hidden = phase !== 'riding' && phase !== 'paused'
   if (rideScreen.hidden) artGallery.hide()
+  musicMenu.hidden = rideScreen.hidden
+  if (musicMenu.hidden) musicMenu.open = false
   pauseScreen.hidden = phase !== 'paused'
   completeScreen.hidden = phase !== 'complete'
   setText(pause.querySelector('span')!, phase === 'paused' ? 'Resume' : 'Pause')
@@ -494,7 +505,7 @@ function showCue() {
   setText(effortDetail, description(effort))
   setText(stage, session.stage.toUpperCase())
   const cadenceNote = session.stage === 'Warm-up' ? 'Keep it easy for now' : 'Effort follows the terrain'
-  const noCountdown = session.mode === 'scenic' ? 'Ride at your own pace' :
+  const noCountdown = session.warmupLap || session.mode === 'scenic' ? 'Ride at your own pace' :
     session.mode === 'steady' && session.stage === 'Main ride' ? 'Keep a steady rhythm' :
       (session.usesCadence || session.isMission) && session.stage !== 'Cool-down' ? cadenceNote : 'Easy to the finish'
   setText(nextEffort, next ? `Next · ${next.effort}` : session.easy ? 'Easy until the finish' : noCountdown)
@@ -525,7 +536,7 @@ function showRide() {
   const rpm = Math.round(cadenceSensor.rpm())
   setText(pedalRpm, session.usesCadence ? String(rpm) : '—')
   const target = preferences.targetCadence
-  cadenceCoaching.hidden = session.mode !== 'steady' || session.easy || session.stage === 'Cool-down'
+  cadenceCoaching.hidden = !session.showsCadenceTarget
   if (!cadenceCoaching.hidden) {
     const feedback = !session.usesCadence ? 'Pair sensor for coaching' : session.stage === 'Warm-up' ? 'Target after warm-up' :
       rpm === 0 ? 'Pedal when ready' : rpm < target - 4 ? 'A little faster' : rpm > target + 4 ? 'Ease your cadence' : 'On target'
@@ -597,6 +608,8 @@ function beginRide(minutes: number, day?: number, mission = false) {
   const input = cadenceSensor.state === 'connected' ? new CadenceRideInput(() => cadenceSensor.rpm()) : new SimulatedRideInput()
   session = new RideSession(input, route, scenario.start, preferences.rideMode)
   session.start(mission ? Infinity : minutes * 60)
+  debugLapDay = undefined
+  updateDailyWarmup(calendarDay())
   if (scenarioId === 'art') artGallery.start()
   world.startRide()
   setText(element('time-label'), mission ? 'RIDE TIME' : 'TIME LEFT')
@@ -667,6 +680,10 @@ function showCompletion() {
   element('ride-again').focus({ preventScroll: true })
 }
 
+function updateDailyWarmup(day: number) {
+  session.warmupLap = preferences.dailyWarmup && debugLapDay !== day && needsDailyWarmup(rideProgressData, day)
+}
+
 function updateTime(now: number) {
   if (now < lastTick) return
   const delta = (now - lastTick) / 1000
@@ -678,7 +695,18 @@ function updateTime(now: number) {
     showRide()
     return
   }
+  const today = calendarDay()
+  updateDailyWarmup(today)
+  const previousLap = session.laps
   session.tick(delta, speed)
+  if (session.laps > previousLap) {
+    if (session.debugged) debugLapDay = today
+    else if (needsDailyWarmup(rideProgressData, today)) {
+      rideProgressData.lastLapDay = today
+      persist()
+    }
+    updateDailyWarmup(today)
+  }
   if (!session.debugged) {
     climbRecorder?.update(session.elapsed, session.distance, cadenceSensor.rpm())
     const trace = lapRecorder.update(session.elapsed, session.distance)
@@ -729,7 +757,7 @@ function pauseRide(focus = true) {
   }
 }
 
-function resumeRide() {
+function resumeRide(focus = true) {
   if (session.phase !== 'paused' || resume.disabled) return
   session.resume()
   void keepScreenAwake()
@@ -738,7 +766,7 @@ function resumeRide() {
   lastEffort = undefined
   showPhase()
   showRide()
-  pause.focus({ preventScroll: true })
+  if (focus) pause.focus({ preventScroll: true })
 }
 
 pairCadence.addEventListener('click', () => {
@@ -978,15 +1006,19 @@ menu.addEventListener('click', event => {
   if (event.target instanceof Element && event.target.closest('button')) menu.open = false
 })
 document.addEventListener('click', event => {
-  if (event.target instanceof Node && !menu.contains(event.target)) menu.open = false
+  if (!(event.target instanceof Node)) return
+  if (!menu.contains(event.target)) menu.open = false
+  if (!musicMenu.contains(event.target)) musicMenu.open = false
 })
-menu.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && menu.open) {
-    event.stopPropagation()
-    menu.open = false
-    menu.querySelector('summary')!.focus()
-  }
-})
+for (const dropdown of [menu, musicMenu]) {
+  dropdown.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && dropdown.open) {
+      event.stopPropagation()
+      dropdown.open = false
+      dropdown.querySelector('summary')!.focus()
+    }
+  })
+}
 scenarioPicker.addEventListener('change', () => {
   if (isScenarioId(scenarioPicker.value)) changeScenario(scenarioPicker.value)
   scenarioPicker.value = scenarioId
@@ -1036,7 +1068,7 @@ dailyStart.addEventListener('click', () => {
   if (scenarioId === id) beginRide(dailyMinutes, day)
 })
 pause.addEventListener('click', () => session.phase === 'paused' ? resumeRide() : pauseRide())
-resume.addEventListener('click', resumeRide)
+resume.addEventListener('click', () => resumeRide())
 makeEasier.addEventListener('click', easeRide)
 mute.addEventListener('click', toggleMute)
 let fullscreenNoticeTimer: number | undefined
@@ -1071,6 +1103,28 @@ element('ride-again').addEventListener('click', () => beginRide(session.duration
 element('return-start').addEventListener('click', returnToStart)
 
 settings.addEventListener('close', () => { if (shouldResume) resumeRide() })
+const artViewer = element<HTMLDialogElement>('art-viewer')
+let resumeAfterArtwork = false
+element('view-artwork').addEventListener('click', () => {
+  resumeAfterArtwork = session.phase === 'riding'
+  if (resumeAfterArtwork) pauseRide(false)
+  if (!artGallery.openViewer()) resumeAfterArtwork = false
+})
+artViewer.addEventListener('close', () => {
+  if (resumeAfterArtwork) {
+    resumeRide(false)
+    element('view-artwork').focus({ preventScroll: true })
+  }
+  resumeAfterArtwork = false
+})
+warmupEnabled.addEventListener('change', () => {
+  preferences.dailyWarmup = warmupEnabled.checked
+  persist()
+  if (session.phase === 'paused') {
+    updateDailyWarmup(calendarDay())
+    showRide()
+  }
+})
 weeklyGoalInput.addEventListener('input', () => {
   if (!validWeeklyGoal(weeklyGoalInput.valueAsNumber)) return
   preferences.weeklyGoal = weeklyGoalInput.valueAsNumber
@@ -1104,9 +1158,7 @@ for (const field of audioFields) {
     showSound()
   })
 }
-musicStyleInput.addEventListener('change', () => {
-  const style = musicStyleInput.value
-  if (!isMusicStyle(style)) return
+function selectMusic(style: Preferences['musicStyle']) {
   preferences.musicStyle = style
   preferences.music = true
   preferences.muted = false
@@ -1114,7 +1166,13 @@ musicStyleInput.addEventListener('change', () => {
   persist()
   audio.activate()
   showSound()
+}
+musicStyleInput.addEventListener('change', () => {
+  const style = musicStyleInput.value
+  if (isMusicStyle(style)) selectMusic(style)
 })
+element('music-next').addEventListener('click', () => selectMusic(audio.changeTrack(preferences.musicStyle, 'next')))
+element('music-shuffle').addEventListener('click', () => selectMusic(audio.changeTrack(preferences.musicStyle, 'random')))
 musicVolumeInput.addEventListener('input', () => {
   preferences.musicVolume = musicVolumeInput.valueAsNumber
   persist()
@@ -1134,7 +1192,7 @@ element('visual-only').addEventListener('click', () => {
 })
 
 document.addEventListener('keydown', event => {
-  if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || settings.open || bayEvents.open) return
+  if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || settings.open || bayEvents.open || artViewer.open) return
   const target = event.target
   if (target instanceof HTMLElement && target.closest('input,select,textarea,[contenteditable],summary,#ride-radio')) return
   const key = event.key.toLowerCase()

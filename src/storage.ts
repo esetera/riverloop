@@ -6,7 +6,8 @@ import { efforts, rideModes } from './session.ts'
 import type { Effort, RideMode, Summary } from './session.ts'
 
 export type Quality = 'light' | 'balanced' | 'high'
-export const electronicStyles = ['drift', 'fogbloom', 'pulse', 'arps', 'synthwave', 'house', 'techno', 'breaks', 'afterhours', 'harbor', 'nightshift'] as const
+export const electronicStyles = ['drift', 'fogbloom', 'pulse', 'arps', 'synthwave', 'house', 'techno', 'breaks',
+  'glasswire', 'switchyard', 'tidal-echo', 'night-buoy', 'afterhours', 'harbor', 'nightshift'] as const
 export type ElectronicStyle = typeof electronicStyles[number]
 export type MusicStyle = 'random' | ElectronicStyle
 export function isMusicStyle(value: unknown): value is MusicStyle {
@@ -29,6 +30,7 @@ export type Preferences = {
   ghost: boolean
   rideMode: RideMode
   targetCadence: number
+  dailyWarmup: boolean
 }
 type Save = { version: 1; preferences: Preferences; rides: Summary[]; progress: RideProgress }
 
@@ -51,6 +53,7 @@ export function defaultPreferences(): Preferences {
     ghost: false,
     rideMode: 'hills',
     targetCadence: 75,
+    dailyWarmup: true,
   }
 }
 
@@ -95,7 +98,7 @@ export function loadSave(): Save {
     if (isMusicStyle(saved.musicStyle)) preferences.musicStyle = saved.musicStyle
     if (typeof saved.musicVolume === 'number' && Number.isInteger(saved.musicVolume) &&
         saved.musicVolume >= 0 && saved.musicVolume <= 100) preferences.musicVolume = saved.musicVolume
-    for (const field of ['ambient', 'speech', 'music', 'cycling', 'muted', 'ghost'] as const) {
+    for (const field of ['ambient', 'speech', 'music', 'cycling', 'muted', 'ghost', 'dailyWarmup'] as const) {
       if (typeof saved[field] === 'boolean') preferences[field] = saved[field]
     }
     if (saved.quality === 'light' || saved.quality === 'balanced' || saved.quality === 'high') {
@@ -123,6 +126,12 @@ export function loadSave(): Save {
     }
     if (typeof savedProgress.weekResetAt === 'number' && Number.isFinite(savedProgress.weekResetAt)) progress.weekResetAt = savedProgress.weekResetAt
     if (typeof savedProgress.lastDaily === 'number' && Number.isInteger(savedProgress.lastDaily)) progress.lastDaily = savedProgress.lastDaily
+    if (typeof savedProgress.lastLapDay === 'number' && Number.isInteger(savedProgress.lastLapDay)) {
+      progress.lastLapDay = savedProgress.lastLapDay
+    } else {
+      const lastLapRide = result.rides.find(ride => ride.laps > 0)
+      if (lastLapRide) progress.lastLapDay = calendarDay(new Date(lastLapRide.endedAt))
+    }
     if (Array.isArray(savedProgress.discovered)) {
       const discovered = savedProgress.discovered
       progress.discovered = scenarioIds.filter(id => discovered.includes(id))

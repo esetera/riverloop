@@ -10,6 +10,7 @@ export type CadenceGhostHistory = { recent: number[][]; best: number[] }
 export type RideProgress = {
   days: Record<number, number>
   lastDaily?: number
+  lastLapDay?: number
   weekResetAt?: number
   discovered: ScenarioId[]
   ghosts: Partial<Record<GhostKey, number[]>>
@@ -21,6 +22,10 @@ export type RideProgress = {
 
 export function calendarDay(date = new Date()) {
   return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000
+}
+
+export function needsDailyWarmup(progress: Pick<RideProgress, 'lastLapDay'>, day: number) {
+  return progress.lastLapDay !== day
 }
 
 const dailyRoutes = scenarioIds.filter(id => id !== 'ideas' && id !== 'thought')
