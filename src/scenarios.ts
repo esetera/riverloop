@@ -1,6 +1,6 @@
 import { LoopRoute, smoothstep, startingDistance } from './route.ts'
 
-export const scenarioIds = ['valley', 'coast', 'cyber', 'echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art', 'berkeley', 'umbra'] as const
+export const scenarioIds = ['valley', 'coast', 'cyber', 'echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art', 'berkeley', 'umbra', 'tideglass', 'wind-organ', 'cloudpost'] as const
 export type ScenarioId = typeof scenarioIds[number]
 type Scenario = {
   number: string
@@ -170,6 +170,46 @@ export function umbraGround(x: number, z: number) {
   return .18 + .32 * Math.cos(x / 39 + z / 53) + .28 * Math.sin(z / 36) + bank
 }
 
+const tideglass: [number, number][] = [
+  [-83, 151], [-90, 99], [-96, 43], [-94, -17], [-88, -78], [-70, -139],
+  [-23, -175], [44, -177], [103, -133], [131, -72], [123, -3], [113, 69],
+  [82, 133], [29, 169], [-25, 181], [-62, 171],
+]
+
+export function tideglassGround(x: number, z: number) {
+  const ridge = 9 * Math.exp(-(((x - 108) / 79) ** 2 + ((z - 2) / 105) ** 2))
+  const basin = 4 * Math.exp(-(((x + 15) / 63) ** 2 + ((z + 140) / 86) ** 2))
+  return ridge - basin + .85 * Math.sin(x / 32 + z / 48) + .5 * Math.cos(z / 27)
+}
+
+const windOrgan: [number, number][] = [
+  [-118, 225], [-117, 167], [-109, 112], [-87, 61], [-93, 2],
+  [-128, -55], [-144, -115], [-126, -181], [-74, -225], [-6, -244],
+  [67, -220], [123, -179], [154, -117], [143, -47], [109, 17],
+  [120, 83], [143, 150], [121, 213], [60, 251], [-15, 259], [-84, 254],
+]
+
+export function windOrganGround(x: number, z: number) {
+  const ridge = 7.5 * Math.exp(-(((x + 141) / 111) ** 2 + ((z + 100) / 90) ** 2))
+  const bench = 5 * Math.exp(-(((x - 121) / 106) ** 2 + ((z - 133) / 79) ** 2))
+  return 2.6 + ridge + bench + 1.2 * Math.sin(x / 41 + z / 57) + .8 * Math.cos(z / 32)
+}
+
+const cloudpost: [number, number][] = [
+  [-310, 278], [-256, 249], [-201, 219], [-152, 172], [-105, 112], [-62, 54],
+  [-12, -7], [60, -65], [151, -131], [239, -206], [251, -272], [210, -333],
+  [135, -355], [48, -338], [-26, -279], [-116, -251], [-214, -254], [-308, -224],
+  [-375, -152], [-413, -64], [-426, 34], [-417, 131], [-375, 219],
+]
+
+export function cloudpostGround(x: number, z: number) {
+  const rise = (cx: number, cz: number, rx: number, rz: number, height: number) =>
+    height * Math.exp(-(((x - cx) / rx) ** 2 + ((z - cz) / rz) ** 2))
+  return 53 + 2.4 * Math.sin(x / 84 + z / 97)
+    + rise(14, -34, 111, 112, 10) + rise(201, -293, 125, 105, 10)
+    + rise(-422, -47, 96, 115, 9) + rise(-314, 238, 88, 107, 6)
+}
+
 export const scenarios: Record<ScenarioId, Scenario> = {
   valley: {
     number: '01', title: ['Willowmere', 'Valley'], start: startingDistance,
@@ -290,6 +330,30 @@ export const scenarios: Record<ScenarioId, Scenario> = {
     discovery: { name: 'Shadow Station', at: 205 },
     mission: { name: 'Ride into totality', description: 'Follow the causeway to Shadow Station as the sun disappears.', arrival: 'Totality at Shadow Station. Look for the corona above the salt flats.' },
     makeRoute: () => new LoopRoute(umbra, (x, z) => umbraGround(x, z) + .20),
+  },
+  tideglass: {
+    number: '16', title: ['Tideglass', 'Passage'], start: 12,
+    description: 'Ride a glass passage through a kelp forest and across the seafloor. A whale and calf cross over Lantern Gate on every lap.',
+    landmarks: 'KELP FOREST · LANTERN GATE · CORAL GARDEN',
+    discovery: { name: 'Lantern Gate', at: 181 },
+    mission: { name: 'Under the whales', description: 'Watch the water ahead as you approach Lantern Gate.', arrival: 'You reached Lantern Gate. Watch for the calf behind the whale.' },
+    makeRoute: () => new LoopRoute(tideglass, (x, z) => tideglassGround(x, z) + .38),
+  },
+  'wind-organ': {
+    number: '17', title: ['Wind Organ', 'Canyon'], start: 8,
+    description: 'Follow a road through red-rock mesas. Three wind organs turn their vanes and light up as you ride past.',
+    landmarks: 'RED-ROCK MESAS · WIND CHOIR · COPPER VANES',
+    discovery: { name: 'Wind Choir', at: 460 },
+    mission: { name: 'Wake the Wind Choir', description: 'Pass the first wind organ and climb to the choir below the mesas.', arrival: 'You reached the Wind Choir. Look for the lights climbing the pipes.' },
+    makeRoute: () => new LoopRoute(windOrgan, (x, z) => windOrganGround(x, z) + .45),
+  },
+  cloudpost: {
+    number: '18', title: ['Cloudpost', 'Islands'], start: 9,
+    description: 'Cross bridges above a sea of clouds. At Cloudpost Station, a striped balloon lifts off with the island mail as you ride past.',
+    landmarks: 'SKY BRIDGES · MAIL BALLOONS · CLOUDPOST STATION',
+    discovery: { name: 'Cloudpost Station', at: 444 },
+    mission: { name: 'Catch the morning post', description: 'Cross the sky bridges to Cloudpost Station to see the mail balloon lift off.', arrival: 'Cloudpost Station is sending off the morning mail. Look for the striped balloon.' },
+    makeRoute: () => new LoopRoute(cloudpost, (x, z) => cloudpostGround(x, z) + .60),
   },
 }
 

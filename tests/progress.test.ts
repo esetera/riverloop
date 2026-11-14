@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { calendarDay, dailyRoute, ghostPosition, ghostTime, LapRecorder, recordMilestones, recordMinutes, validTrace, weekSeconds } from '../src/progress.ts'
+import { calendarDay, dailyRoute, ghostPosition, GhostReplay, ghostTime, LapRecorder, recordMilestones, recordMinutes, validTrace, weekSeconds } from '../src/progress.ts'
 import type { RideProgress } from '../src/progress.ts'
 
 test('daily routes rotate and the weekly minutes reset on local Monday', () => {
@@ -34,6 +34,25 @@ test('the last-lap ghost replays timed splits and excludes the unfinished lap', 
   const next = recorder.update(149, 1200)!
   assert(validTrace(next))
   assert.equal(next.at(-1), 69)
+})
+
+test('a ghost rides through its lap boundary and keeps its position when the saved lap changes', () => {
+  const fast = Array.from({ length: 61 }, (_, split) => split)
+  const slow = fast.map(split => split * 2)
+  const ghost = new GhostReplay(fast)
+  assert.ok(ghost.sample(59.9)!.position < 1)
+  assert.deepEqual(ghost.sample(60), { position: 1, opacity: 1 })
+  assert.ok(ghost.sample(60.1)!.position > 1)
+  assert.equal(ghost.sample(90)!.position, 1.5)
+
+  ghost.replace(slow, 90)
+  assert.equal(ghost.sample(90)!.position, 1.5)
+  assert.equal(ghost.sample(120)!.position, 1.75)
+  ghost.replace(undefined, 120)
+  const fading = ghost.sample(120.4)!
+  assert.ok(fading.position > 1.75)
+  assert.ok(fading.opacity > 0 && fading.opacity < 1)
+  assert.equal(ghost.sample(121), undefined)
 })
 
 test('milestones compare the same route and welcome riders back after seven days', () => {

@@ -1,5 +1,5 @@
 import * as T from 'three'
-import { artGround, auroraGround, berkeleyGround, cityGround, coastEdge, coastGround, echoGround, gackaGround, ponsonbyGround, thoughtGround, umbraGround, scenarios, type ScenarioId } from './scenarios.ts'
+import { artGround, auroraGround, berkeleyGround, cityGround, cloudpostGround, coastEdge, coastGround, echoGround, gackaGround, ponsonbyGround, thoughtGround, tideglassGround, umbraGround, windOrganGround, scenarios, type ScenarioId } from './scenarios.ts'
 import { groundHeight, riverCenter, riverEdge, RouteClearance, waterLevel, type LoopRoute } from './route.ts'
 
 // Actors share their small set of shapes and paints within each course.
@@ -32,7 +32,7 @@ function models() {
 }
 
 export function addGradeSigns(scene: T.Scene, route: LoopRoute, scenario: ScenarioId) {
-  const terrain = { valley: groundHeight, coast: coastGround, cyber: cityGround, echo: echoGround, machine: cityGround, airwave: coastGround, folio: cityGround, aurora: auroraGround, ideas: auroraGround, gacka: gackaGround, ponsonby: ponsonbyGround, thought: thoughtGround, art: artGround, berkeley: berkeleyGround, umbra: umbraGround }[scenario]
+  const terrain = { valley: groundHeight, coast: coastGround, cyber: cityGround, echo: echoGround, machine: cityGround, airwave: coastGround, folio: cityGround, aurora: auroraGround, ideas: auroraGround, gacka: gackaGround, ponsonby: ponsonbyGround, thought: thoughtGround, art: artGround, berkeley: berkeleyGround, umbra: umbraGround, tideglass: tideglassGround, 'wind-organ': windOrganGround, cloudpost: cloudpostGround }[scenario]
   const themes = {
     valley: ['#425346', '#f8dfad'],
     coast: ['#25556a', '#ffedc6'],
@@ -49,6 +49,9 @@ export function addGradeSigns(scene: T.Scene, route: LoopRoute, scenario: Scenar
     art: ['#272a3b', '#ffda9e'],
     berkeley: ['#163d45', '#fff5d9'],
     umbra: ['#33334b', '#ffd4ac'],
+    tideglass: ['#122e3d', '#ffe5bd'],
+    'wind-organ': ['#412c2a', '#ffdeb5'],
+    cloudpost: ['#293f53', '#f2ddac'],
   }
   const [background, ink] = themes[scenario]
   const boards = new Map<boolean, T.MeshBasicMaterial>()
@@ -62,9 +65,11 @@ export function addGradeSigns(scene: T.Scene, route: LoopRoute, scenario: Scenar
     const kind = grade > 3.2 ? 1 : grade < -3.2 ? -1 : 0
     if (kind && kind !== previous && offset - last >= 85) {
       const { point, right, tangent } = route.frameAt(distance)
-      const x = point.x + right.x * 4.65
-      const z = point.z + right.z * 4.65
-      if (terrain(x, z) > -.2 || scenario === 'cyber' || scenario === 'machine') {
+      const shoulder = scenario === 'cloudpost' ? 3.75 : 4.65
+      const x = point.x + right.x * shoulder
+      const z = point.z + right.z * shoulder
+      const height = scenario === 'cloudpost' ? point.y : terrain(x, z)
+      if (height > -.2 || scenario === 'cyber' || scenario === 'machine') {
         if (scenario !== 'valley' || riverEdge(x, z) >= 6) {
           const uphill = kind > 0
           let material = boards.get(uphill)
@@ -92,7 +97,7 @@ export function addGradeSigns(scene: T.Scene, route: LoopRoute, scenario: Scenar
             boards.set(uphill, material)
           }
           const sign = new T.Group()
-          sign.position.set(x, terrain(x, z), z)
+          sign.position.set(x, height, z)
           sign.rotation.y = Math.atan2(-tangent.x, -tangent.z)
           model(sign, 'box', background, 0, .76, 0, .09, 1.54, .09)
           const face = new T.Mesh(new T.PlaneGeometry(1.42, .66), material)

@@ -761,6 +761,12 @@ fieldset small, .developer-settings small { color: var(--muted); font-size: 10.5
 [data-scenario="berkeley"] .ride-metrics { background-color: #193a42df; }
 [data-scenario="umbra"] { --meter-color: #29253fdc; }
 [data-scenario="umbra"] :is(.start-card, .scenario-picker, .hud-panel, .ride-controls, .route-card) { background-color: #29253fed; }
+[data-scenario="tideglass"] { --meter-color: #102c3ee8; }
+[data-scenario="tideglass"] :is(.start-card, .scenario-picker, .hud-panel, .ride-controls, .route-card) { background: #102c3eed; }
+[data-scenario="wind-organ"] { --meter-color: #3b2925ed; }
+[data-scenario="wind-organ"] :is(.start-card, .scenario-picker, .hud-panel, .ride-controls, .route-card) { background-color: #3b2925ef; }
+[data-scenario="cloudpost"] { --meter-color: #243b51e8; }
+[data-scenario="cloudpost"] :is(.start-card, .scenario-picker, .hud-panel, .ride-controls, .route-card) { background-color: #243b51ed; }
 @media (1100px < width <= 1400px) {
   [data-scenario="berkeley"] .ride-metrics { bottom: 68px; width: 345px; }
 }

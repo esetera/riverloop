@@ -108,6 +108,52 @@ export function ghostTime(trace: number[], fraction: number) {
   return trace[i] + (split - i) * ((trace[i + 1] ?? trace[i]) - trace[i])
 }
 
+const ghostFadeSeconds = .8
+
+export class GhostReplay {
+  private trace: number[]
+  private startedAt: number
+  private readonly introducedAt?: number
+  private retirement?: number
+
+  constructor(trace: number[], startedAt = 0, introducedAt?: number) {
+    this.trace = trace
+    this.startedAt = startedAt
+    this.introducedAt = introducedAt
+  }
+
+  replace(trace: number[] | undefined, elapsed: number) {
+    if (!trace) {
+      this.retirement ??= elapsed
+      return
+    }
+    this.retirement = undefined
+    if (trace === this.trace) return
+    // Change the pace without moving the rider when the saved lap changes.
+    const position = this.positionAt(elapsed)
+    const laps = Math.floor(position)
+    this.trace = trace
+    this.startedAt = elapsed - laps * trace[lapSplits] - ghostTime(trace, position - laps)
+  }
+
+  retiredAt(elapsed: number) {
+    return this.retirement !== undefined && elapsed - this.retirement >= ghostFadeSeconds
+  }
+
+  sample(elapsed: number) {
+    const fadeIn = this.introducedAt === undefined ? 1 : (elapsed - this.introducedAt) / ghostFadeSeconds
+    const fadeOut = this.retirement === undefined ? 1 : 1 - (elapsed - this.retirement) / ghostFadeSeconds
+    const opacity = Math.min(1, fadeIn, fadeOut)
+    if (opacity > 0) return { position: this.positionAt(elapsed), opacity }
+  }
+
+  private positionAt(elapsed: number) {
+    const time = Math.max(0, elapsed - this.startedAt)
+    const lap = this.trace[lapSplits]
+    return Math.floor(time / lap) + ghostPosition(this.trace, time % lap)
+  }
+}
+
 export function longestClimb(route: LoopRoute, start: number) {
   let from = 0
   let best: { from: number; to: number } | undefined

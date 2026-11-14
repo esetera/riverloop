@@ -4,7 +4,8 @@ import { RideRadio } from './ride-radio.ts'
 import { CadenceSensor } from './cadence.ts'
 import { CadenceRideInput, SimulatedRideInput } from './input.ts'
 import { HeartRateSensor } from './heart-rate.ts'
-import { cadenceReplay, calendarDay, ClimbRecorder, dailyMinutes, dailyRoute, ghostKey, ghostPosition, ghostTime, LapRecorder, recordCadenceLap, recordMilestones, recordMinutes, weekSeconds, weekStart } from './progress.ts'
+import type { GhostRiderPose } from './ghost.ts'
+import { cadenceReplay, calendarDay, ClimbRecorder, dailyMinutes, dailyRoute, ghostKey, GhostReplay, ghostTime, LapRecorder, recordCadenceLap, recordMilestones, recordMinutes, weekSeconds, weekStart } from './progress.ts'
 import { riverCenter } from './route.ts'
 import { drawProfile } from './profile.ts'
 import { berkeleyShore, coastEdge, echoLake, isScenarioId, scenarioIds, scenarios } from './scenarios.ts'
@@ -163,8 +164,9 @@ let discoveryDistance = 0
 let discoveryNoticeUntil = 0
 let lapRecorder = new LapRecorder(route.length)
 let replays: (number[] | undefined)[] = []
+let ghostReplays: (GhostReplay | undefined)[] = []
 let savedLastLap = false
-let replayFractions: (number | undefined)[] = []
+let ghostRiders: (GhostRiderPose | undefined)[] = []
 let climbRecorder: ClimbRecorder | undefined
 let effortDetailsUntil = 0
 
@@ -246,7 +248,7 @@ function makeMap(id: string) {
   }).join(' ') + ' Z'
   svg.append(svgNode('path', { d: road, class: 'map-road' }))
   if (scenarioId === 'valley') svg.append(svgNode('circle', { cx: '105', cy: '-22', r: '8', class: 'map-site' }))
-  if (['echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art', 'berkeley', 'umbra'].includes(scenarioId)) {
+  if (['echo', 'machine', 'airwave', 'folio', 'aurora', 'ideas', 'gacka', 'ponsonby', 'thought', 'art', 'berkeley', 'umbra', 'tideglass', 'wind-organ', 'cloudpost'].includes(scenarioId)) {
     const site = route.pointAt(scenario.discovery.at)
     svg.append(svgNode('circle', { cx: site.x.toFixed(1), cy: site.z.toFixed(1), r: '7', class: 'map-site' }))
   }
@@ -536,11 +538,8 @@ function showRide() {
   rideMap(scenario.start + session.distance)
   const showGhosts = session.usesCadence || preferences.ghost
   const lapTime = lapRecorder.lapElapsed(session.elapsed)
-  replayFractions = showGhosts ? replays.map(trace => {
-    if (!trace) return
-    const fraction = ghostPosition(trace, lapTime)
-    return fraction < 1 ? fraction : undefined
-  }) : []
+  const ghosts = showGhosts ? ghostReplays.map(replay => replay?.sample(session.elapsed)) : []
+  ghostRiders = ghosts.map(ghost => ghost && { distance: scenario.start + ghost.position * route.length, opacity: ghost.opacity })
   ghostReadout.hidden = !showGhosts
   const paceTrace = replays[session.usesCadence ? 0 : 1]
   ghostPace.classList.toggle('best-ghost-pace', session.usesCadence && !!paceTrace)
@@ -554,7 +553,7 @@ function showRide() {
       setText(ghostPace, session.usesCadence ? 'Ghosts appear after your first lap.' : 'Finish a lap to save a ghost for your next ride.')
     }
   }
-  rideProfile.update(session.distance, replayFractions)
+  rideProfile.update(session.distance, ghosts.map(ghost => ghost && ghost.position % 1))
   const metres = Math.max(0, Math.ceil(discoveryDistance - session.distance))
   setText(rideLandmark, `${scenario.discovery.name} · ${discoveryReached ? 'Reached' : metres + ' m'}`)
   missionStatus.hidden = !session.isMission
@@ -610,6 +609,7 @@ function beginRide(minutes: number, day?: number, mission = false) {
   lapRecorder = new LapRecorder(route.length)
   replays = session.usesCadence ? cadenceReplay(rideProgressData.cadenceGhosts?.[scenarioId]) :
     [undefined, rideProgressData.ghosts[ghostKey(scenarioId, false)]]
+  ghostReplays = replays.map(trace => trace && new GhostReplay(trace))
   lastEffort = undefined
   warnedAt = -1
   effortDetailsUntil = 0
@@ -687,6 +687,13 @@ function updateTime(now: number) {
         const histories = (rideProgressData.cadenceGhosts ??= {})
         histories[scenarioId] = recordCadenceLap(histories[scenarioId], trace)
         replays = cadenceReplay(histories[scenarioId])
+        const lapStart = session.elapsed - lapRecorder.lapElapsed(session.elapsed)
+        for (let i = 0; i < Math.max(replays.length, ghostReplays.length); i++) {
+          const next = replays[i]
+          const replay = ghostReplays[i]
+          if (replay && !replay.retiredAt(session.elapsed)) replay.replace(next, session.elapsed)
+          else ghostReplays[i] = next && new GhostReplay(next, lapStart, session.elapsed)
+        }
       } else {
         rideProgressData.ghosts[ghostKey(scenarioId, false)] = trace
       }
@@ -1243,11 +1250,10 @@ function frame(now: number) {
     element<HTMLButtonElement>('jump-lap').disabled = phase !== 'riding'
     if (phase !== 'riding') element<HTMLButtonElement>('jump-effort').disabled = true
   }
-  const ghostDistances = phase === 'riding' || phase === 'paused' ? replayFractions.map(fraction =>
-    fraction === undefined ? undefined : scenario.start + (session.laps + fraction) * route.length) : undefined
+  const visibleGhosts = phase === 'riding' || phase === 'paused' ? ghostRiders : undefined
   if (session.isMission && phase !== 'idle') world?.setMissionProgress(Math.min(1, session.distance / discoveryDistance))
   const sceneSound = world?.draw(phase === 'idle' ? scenario.start : scenario.start + session.distance,
-    dt, phase === 'idle', phase === 'idle' || phase === 'riding', ghostDistances,
+    dt, phase === 'idle', phase === 'idle' || phase === 'riding', visibleGhosts,
     phase === 'riding' || phase === 'paused', phase === 'riding' && audio.sceneAudible)
   if (sceneSound) audio.updateScene(sceneSound)
   if (developer && ++frames && now - fpsSince >= 1000) {
