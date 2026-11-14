@@ -8,7 +8,7 @@ import { makeEchoScene } from './echo-world.ts'
 import { makeFolioScene } from './folio-world.ts'
 import { makeAuroraScene } from './aurora-world.ts'
 import { LoopRoute, RouteClearance, riderLaneOffset, smoothstep } from './route.ts'
-import { ghostRiderColors, makeGhostCyclist } from './ghost.ts'
+import { ghostRiderColors, makeGhostCyclist, type GhostRiderPose } from './ghost.ts'
 import type { ScenarioId } from './scenarios.ts'
 import { roadPanels } from './roadside-billboards.ts'
 import type { Lesson } from './lessons.ts'
@@ -16,6 +16,9 @@ import type { RoadSource } from './road-links.ts'
 import { makeThoughtScene } from './thought-world.ts'
 import { makeArtScene } from './art-world.ts'
 import { makeUmbraScene } from './umbra-world.ts'
+import { makeTideglassScene } from './tideglass-world.ts'
+import { makeWindOrganScene } from './wind-organ-world.ts'
+import { makeCloudpostScene } from './cloudpost-world.ts'
 import type { ThoughtRide } from './thinking.ts'
 import { makeBerkeleyScene, makeGackaScene, makePonsonbyScene } from './place-worlds.ts'
 import { makeRoadContact } from './road-contact.ts'
@@ -23,8 +26,8 @@ import type { RideSoundFrame } from './audio.ts'
 import type { Quality } from './storage.ts'
 
 const pixelRatios: Record<Quality, number> = { light: .78, balanced: 1.25, high: 2 }
-const ghostLanes = [-1.85, -1.05, 1.65, -.25]
-const ponsonbyGhostLanes = [.65, 1.45, -.15, 2.25]
+const ghostLanes = [-.38, 1.60, -1.44, 2.49]
+const ponsonbyGhostLanes = [-.14, .82, 1.60, 2.39]
 
 function addBirds(scene: T.Scene) {
   const flock = new T.Group()
@@ -107,6 +110,7 @@ const scenery: Record<ScenarioId, (route: LoopRoute) => CourseScene> = {
   airwave: route => makeCoastScene(route, true), folio: makeFolioScene, aurora: makeAuroraScene,
   ideas: route => makeAuroraScene(route, true), gacka: makeGackaScene, ponsonby: makePonsonbyScene,
   thought: makeThoughtScene, art: makeArtScene, berkeley: makeBerkeleyScene, umbra: makeUmbraScene,
+  tideglass: makeTideglassScene, 'wind-organ': makeWindOrganScene, cloudpost: makeCloudpostScene,
 }
 function makeCourse(route: LoopRoute, scenario: ScenarioId) {
   const course = scenery[scenario](route)
@@ -150,7 +154,7 @@ export class RideWorld {
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
   private linkElements: HTMLAnchorElement[] = []
   private course: CourseScene
-  private ghosts: T.Group[]
+  private ghosts: ReturnType<typeof makeGhostCyclist>[]
   private previewMix = 1
   private sceneryTime = 0
   private quality: Quality = 'balanced'
@@ -216,7 +220,7 @@ export class RideWorld {
     this.renderer.setSize(width, height, false)
   }
 
-  draw(distance: number, dt: number, preview: boolean, animate: boolean, ghostDistances: (number | undefined)[] = [], linkable = false, listen = false) {
+  draw(distance: number, dt: number, preview: boolean, animate: boolean, ghostPoses: (GhostRiderPose | undefined)[] = [], linkable = false, listen = false) {
     if (animate) this.sceneryTime += Math.min(dt, .075)
     if (animate) this.previewMix = T.MathUtils.damp(this.previewMix, preview ? 1 : 0, 4.0, Math.min(dt, .08))
     const frame = this.route.frameAt(distance)
@@ -235,15 +239,15 @@ export class RideWorld {
     }
     this.camera.lookAt(future)
     const lanes = this.scenario === 'ponsonby' ? ponsonbyGhostLanes : ghostLanes
-    this.ghosts.forEach((ghost, index) => {
-      const ghostDistance = ghostDistances[index]
-      const gap = ghostDistance === undefined ? Infinity : ghostDistance - distance
-      ghost.visible = !preview && gap >= -1.2 && gap <= 115
-      if (!ghost.visible) return
-      // Keep a rider at matching pace in view of the first-person camera.
-      const ghostFrame = this.route.frameAt(distance + Math.max(5.4, gap))
-      ghost.position.copy(ghostFrame.point).addScaledVector(ghostFrame.right, lanes[index])
-      ghost.rotation.y = Math.atan2(ghostFrame.tangent.x, ghostFrame.tangent.z)
+    this.ghosts.forEach(({ rider, animate }, index) => {
+      const pose = ghostPoses[index]
+      rider.visible = !preview && pose !== undefined
+      if (preview || !pose) return
+      const { point, tangent, right } = this.route.frameAt(pose.distance)
+      rider.position.copy(point).addScaledVector(right, lanes[index])
+      const pitch = Math.atan(this.route.gradeAt(pose.distance) / 100)
+      rider.rotation.set(-pitch, Math.atan2(tangent.x, tangent.z), 0, 'YXZ')
+      animate(pose.distance, pose.opacity, this.reducedMotion.matches)
     })
     this.course.animate(this.sceneryTime, eye, distance)
     this.renderer.render(this.course.scene, this.camera)

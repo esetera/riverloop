@@ -1,4 +1,5 @@
-import { electronicStyles, type ElectronicStyle, type Preferences } from './storage.ts'
+import { electronicStyles, type ElectronicStyle, type MusicStyle, type Preferences } from './storage.ts'
+import { isRideTrack, rideTracks, type RideTrack, type RideTrackId } from './ride-tracks.ts'
 import type { RoadMaterial } from './road-contact.ts'
 
 type SpatialSound = { pan: number; level: number }
@@ -29,7 +30,7 @@ const fogVoicings = [
   [55, 164.81, 261.63, 440, 659.25],
   [73.42, 146.83, 293.66, 329.63, 880],
 ]
-const tracks: Record<Exclude<ElectronicStyle, 'fogbloom'>, Track> = {
+const tracks: Record<Exclude<ElectronicStyle, 'fogbloom' | RideTrackId>, Track> = {
   drift: {
     interval: 4.8, step: .34, hold: 5.5, attack: .85, wave: 'triangle',
     chords: [[146.83, 220, 293.66, 369.99], [130.81, 196, 261.63, 329.63],
@@ -151,9 +152,11 @@ export class RideAudio {
   private nextSurfUpdate = 0
   private drumNoise?: AudioBuffer
   private musicTimer?: number
+  private trackBus?: GainNode
   private chord = 0
   private randomStyle: ElectronicStyle = 'drift'
   private playingStyle?: ElectronicStyle
+  private arrangement?: ElectronicStyle
   private readonly voices = new Set<AudioScheduledSourceNode>()
   private active = false
   private preferences?: Preferences
@@ -183,7 +186,18 @@ export class RideAudio {
     }
   }
 
+  selectedStyle(style: MusicStyle): ElectronicStyle {
+    return style === 'random' ? this.randomStyle : style
+  }
+
+  changeTrack(current: MusicStyle, action: 'next' | 'random'): ElectronicStyle {
+    const index = electronicStyles.indexOf(this.selectedStyle(current))
+    const offset = action === 'next' ? 1 : 1 + Math.floor(Math.random() * (electronicStyles.length - 1))
+    return electronicStyles[(index + offset) % electronicStyles.length]
+  }
+
   newRide() {
+    this.arrangement = undefined
     this.randomStyle = electronicStyles[Math.floor(Math.random() * electronicStyles.length)]
     this.chord = 0
     this.nextGull = this.nextContact = this.nextSurfUpdate = 0
@@ -319,57 +333,127 @@ export class RideAudio {
     const soundscape = active && !preferences.muted && preferences.ambient
     this.scenery?.gain.setTargetAtTime(soundscape ? 1 : 0, context.currentTime, .035)
     if (!soundscape) this.surf?.gain.setTargetAtTime(0, context.currentTime, .04)
-    const requestedStyle = preferences.musicStyle === 'random' ? this.randomStyle : preferences.musicStyle
+    const requestedStyle = this.selectedStyle(preferences.musicStyle)
     const playMusic = active && !preferences.muted && preferences.music && preferences.musicVolume > 0 && context.state === 'running'
     const style = playMusic ? requestedStyle : undefined
     if (style !== this.playingStyle) {
       if (this.musicTimer !== undefined) window.clearInterval(this.musicTimer)
       this.musicTimer = undefined
-      for (const voice of this.voices) voice.stop(context.currentTime + .08)
+      const now = context.currentTime
+      const previousBus = this.trackBus
+      if (previousBus) {
+        previousBus.gain.setTargetAtTime(0, now, .018)
+        window.setTimeout(() => previousBus.disconnect(), 120)
+      }
+      for (const voice of this.voices) voice.stop(now + .10)
       this.voices.clear()
       this.playingStyle = style
+      this.trackBus = undefined
       if (style) {
-        this.playPhrase(style)
-        const interval = style === 'fogbloom' ? fogInterval : tracks[style].interval
-        this.musicTimer = window.setInterval(() => this.playPhrase(style), interval * 1000)
+        if (style !== this.arrangement) this.chord = 0
+        this.arrangement = style
+        const bus = this.trackBus = context.createGain()
+        bus.connect(this.music)
+        const interval = style === 'fogbloom' ? fogInterval : isRideTrack(style) ? 240 / rideTracks[style].bpm : tracks[style].interval
+        let start = now + .035
+        const schedule = () => {
+          if (context.state !== 'running') return
+          if (start < context.currentTime) start = context.currentTime + .02
+          if (start < context.currentTime + .12) {
+            this.playPhrase(style, context, bus, start)
+            start += interval
+          }
+        }
+        schedule()
+        this.musicTimer = window.setInterval(schedule, 50)
       }
     }
     this.music.gain.setTargetAtTime(playMusic ? preferences.musicVolume / 200 : 0, context.currentTime, .12)
   }
 
-  private playPhrase(style: ElectronicStyle) {
+  private playPhrase(style: ElectronicStyle, context: AudioContext, bus: GainNode, phraseStart: number) {
     try {
-      const context = this.context
-      if (!context || !this.music || context.state !== 'running') return
       if (style === 'fogbloom') {
-        this.playFogPhrase(context, this.music)
+        this.playFogPhrase(context, bus, phraseStart)
+        return
+      }
+      if (isRideTrack(style)) {
+        this.playArrangedBar(rideTracks[style], context, bus, phraseStart)
         return
       }
       const { chords, step, hold, attack, wave, kicks, snares, hats, cutoff, stabs } = tracks[style]
       const bar = this.chord++ % chords.length
       const notes = chords[bar]
-      const phraseStart = context.currentTime
       for (const [i, frequency] of notes.entries()) {
         if (!frequency) continue
         const start = phraseStart + i * step
         const level = style === 'drift' ? .20 / (i + 1) : cutoff ? .24 : kicks ? .17 : .26
-        this.tone(context, this.music, start, frequency, wave, attack, hold, level, cutoff)
+        this.tone(context, bus, start, frequency, wave, attack, hold, level, cutoff)
       }
-      for (const beat of kicks ?? []) this.drum(context, this.music, phraseStart + beat * step, 'kick')
-      for (const beat of snares ?? []) this.drum(context, this.music, phraseStart + beat * step, 'snare')
-      for (const beat of hats ?? []) this.drum(context, this.music, phraseStart + beat * step, 'hat')
+      for (const beat of kicks ?? []) this.drum(context, bus, phraseStart + beat * step, 'kick')
+      for (const beat of snares ?? []) this.drum(context, bus, phraseStart + beat * step, 'snare')
+      for (const beat of hats ?? []) this.drum(context, bus, phraseStart + beat * step, 'hat')
       for (const [beat, frequency] of stabs?.[bar] ?? []) {
-        this.tone(context, this.music, phraseStart + beat * step, frequency, 'square', .013, .17, .115, 1450)
+        this.tone(context, bus, phraseStart + beat * step, frequency, 'square', .013, .17, .115, 1450)
       }
     } catch {
       // The soundscape is optional.
     }
   }
 
-  private playFogPhrase(context: AudioContext, music: GainNode) {
+  private playArrangedBar(track: RideTrack, context: AudioContext, bus: GainNode, start: number) {
+    const bar = this.chord++ % 16
+    const harmony = bar % track.roots.length
+    const root = track.roots[harmony]
+    const dub = track.genre === 'dub'
+    const step = 15 / track.bpm
+    const hz = (offset: number) => 440 * 2 ** ((root + offset - 69) / 12)
+    const breakdown = bar >= 8 && bar < 10
+    if (!breakdown) {
+      for (const [beat, note, length] of track.bass[harmony]) {
+        const time = start + beat * step
+        this.tone(context, bus, time, hz(note), 'sine', .013, length * step, .26)
+        this.tone(context, bus, time, hz(note), dub ? 'triangle' : 'sawtooth', .012, length * step, .18, dub ? 360 : 1150)
+      }
+      for (const beat of track.kicks[harmony]) this.drum(context, bus, start + beat * step, 'kick', .90)
+    }
+    for (const beat of track.snares[bar % track.snares.length]) {
+      this.drum(context, bus, start + beat * step, 'snare', breakdown ? .45 : beat === 4 || beat === 12 ? 1 : .68)
+    }
+    for (const [index, beat] of track.hats[bar % track.hats.length].entries()) {
+      this.drum(context, bus, start + beat * step, 'hat', index % 2 ? .38 : .69)
+    }
+    if (bar % 4 === 3 && !breakdown) {
+      for (const [index, beat] of track.fills.entries()) {
+        this.drum(context, bus, start + beat * step, dub ? 'hat' : 'snare', .30 + index * .065)
+      }
+    }
+    if (bar % 4 === 0 || bar >= 8) {
+      for (const note of track.chord) {
+        this.tone(context, bus, start, hz(note), 'triangle', .36, step * 18, dub ? .055 : .042, 950)
+      }
+    }
+    for (const [beat, note, length] of track.melody[harmony]) {
+      if (bar < 4 && beat > 6) continue
+      if (dub) {
+        // Put the short chord and its decaying, filtered echoes on opposite sides.
+        for (const [index, interval] of [0, 7, 12].entries()) {
+          for (let echo = 0; echo < 4; echo++) {
+            const pan = echo ? (echo % 2 ? -.65 : .65) : (index - 1) * .24
+            this.tone(context, bus, start + (beat + echo * 3) * step, hz(note + interval), 'square',
+              .012, length * step + .08, .105 * .57 ** echo, 1900 * .74 ** echo, pan)
+          }
+        }
+      } else {
+        this.tone(context, bus, start + beat * step, hz(note), 'triangle', .018, length * step, .16, 2900)
+        if (bar >= 4) this.tone(context, bus, start + (beat + 2.75) * step, hz(note + 12), 'sine', .018, length * step, .055)
+      }
+    }
+  }
+
+  private playFogPhrase(context: AudioContext, music: GainNode, start: number) {
     const bar = this.chord++
     const [root, ...voices] = fogVoicings[bar % fogVoicings.length]
-    const start = context.currentTime
     this.tone(context, music, start, root, 'sine', 1.9, 12, .19)
     for (const [i, note] of voices.entries()) {
       const offset = i * (.38 + (bar % 7) * .11)
@@ -389,7 +473,7 @@ export class RideAudio {
   }
 
   private tone(context: AudioContext, music: GainNode, start: number, frequency: number, wave: OscillatorType,
-    attack: number, hold: number, level: number, cutoff?: number) {
+    attack: number, hold: number, level: number, cutoff?: number, pan?: number) {
     const oscillator = context.createOscillator()
     oscillator.type = wave
     oscillator.frequency.value = frequency
@@ -404,7 +488,12 @@ export class RideAudio {
       filter.frequency.exponentialRampToValueAtTime(cutoff * .32, start + hold)
       oscillator.connect(filter).connect(envelope)
     } else oscillator.connect(envelope)
-    envelope.connect(music)
+    if (pan === undefined) envelope.connect(music)
+    else {
+      const panner = context.createStereoPanner()
+      panner.pan.value = pan
+      envelope.connect(panner).connect(music)
+    }
     this.scheduleVoice(oscillator, start, start + hold + .02)
   }
 
@@ -415,11 +504,11 @@ export class RideAudio {
     source.stop(end)
   }
 
-  private drum(context: AudioContext, music: GainNode, start: number, type: 'kick' | 'snare' | 'hat') {
+  private drum(context: AudioContext, music: GainNode, start: number, type: 'kick' | 'snare' | 'hat', level = 1) {
     const envelope = context.createGain()
     const duration = type === 'kick' ? .20 : type === 'hat' ? .068 : .13
     envelope.gain.setValueAtTime(.0001, start)
-    envelope.gain.exponentialRampToValueAtTime(type === 'kick' ? .38 : type === 'hat' ? .12 : .20, start + .006)
+    envelope.gain.exponentialRampToValueAtTime((type === 'kick' ? .38 : type === 'hat' ? .12 : .20) * level, start + .006)
     envelope.gain.exponentialRampToValueAtTime(.0001, start + duration)
     envelope.connect(music)
     if (type === 'kick') {
